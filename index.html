@@ -279,7 +279,9 @@
     // ── Load model ────────────────────────────────────────────────────────────
     const model = loader.load({ id: "model", src: "./model.xkt", saoEnabled: true, edges: true });
 
+    let totalObjects = 0;
     model.on("loaded", () => {
+      totalObjects = viewer.scene.objectIds.length;
       setStatus("");
       viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
       window.parent.postMessage({ type: "ready" }, "*");
@@ -296,14 +298,22 @@
     });
 
     // ── Highlight (Power BI → 3D) ─────────────────────────────────────────────
+    // XRAY_NON_SELECTED — true: ghost non-highlighted elements, false: show them normally. index.html ~line 302
+    const XRAY_NON_SELECTED = false;
+    let lastHighlightCount = 0;
     function applyHighlight(guids, colorMap) {
-      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, true);
+      const wasEmpty = lastHighlightCount === 0;
+      lastHighlightCount = guids.length;
+      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, XRAY_NON_SELECTED);
       viewer.scene.setObjectsPickable(viewer.scene.objectIds, false);
       viewer.scene.setObjectsColorized(viewer.scene.objectIds, false);
 
-      if (guids.length === 0) {
+      if (guids.length === 0 || (totalObjects > 0 && guids.length >= totalObjects)) {
         viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+        viewer.scene.setObjectsSelected(viewer.scene.objectIds, false);
         viewer.scene.setObjectsPickable(viewer.scene.objectIds, true);
+        viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 0.8 });
+        lastHighlightCount = 0;
         setStatus(""); return;
       }
 
@@ -330,7 +340,7 @@
       }
 
       if (found > 0) {
-        viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        if (wasEmpty) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
       } else {
         setStatus("No matches");
