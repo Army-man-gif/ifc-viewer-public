@@ -294,26 +294,23 @@
     window.addEventListener("message", event => {
       const msg = event.data;
       if (!msg || msg.type !== "highlight") return;
-      applyHighlight(msg.guids || [], msg.colorMap || null);
+      applyHighlight(msg.guids || [], msg.colorMap || null, msg.animate === true);
     });
 
     // ── Highlight (Power BI → 3D) ─────────────────────────────────────────────
     // XRAY_NON_SELECTED — true: ghost non-highlighted elements, false: show them normally. index.html ~line 302
     const XRAY_NON_SELECTED = false;
-    let lastHighlightCount = 0;
-    function applyHighlight(guids, colorMap) {
-      const wasEmpty = lastHighlightCount === 0;
-      lastHighlightCount = guids.length;
+    function applyHighlight(guids, colorMap, animate) {
       viewer.scene.setObjectsXRayed(viewer.scene.objectIds, XRAY_NON_SELECTED);
-      viewer.scene.setObjectsPickable(viewer.scene.objectIds, false);
+      viewer.scene.setObjectsSelected(viewer.scene.objectIds, false);
+      viewer.scene.setObjectsPickable(viewer.scene.objectIds, true);
       viewer.scene.setObjectsColorized(viewer.scene.objectIds, false);
+      clearAnnotation();
 
       if (guids.length === 0 || (totalObjects > 0 && guids.length >= totalObjects)) {
         viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
-        viewer.scene.setObjectsSelected(viewer.scene.objectIds, false);
-        viewer.scene.setObjectsPickable(viewer.scene.objectIds, true);
         viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 0.8 });
-        lastHighlightCount = 0;
+        exitIsolateMode();
         setStatus(""); return;
       }
 
@@ -322,10 +319,12 @@
 
       let found = 0;
       let aabb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      const foundGuids = [];
       for (const guid of guids) {
         const obj = viewer.scene.objects[guid];
         if (!obj) continue;
         obj.xrayed = false; obj.selected = true; obj.pickable = true; found++;
+        foundGuids.push(guid);
         if (colorMap && colorMap[guid] != null && maxVal > minVal) {
           const t = (colorMap[guid] - minVal) / (maxVal - minVal);
           obj.colorize = [t, 1 - t, 0];
@@ -340,10 +339,17 @@
       }
 
       if (found > 0) {
-        if (wasEmpty) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        if (animate) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
+        // Activate isolate nav for multi-element PBI selections
+        if (foundGuids.length > 1) {
+          selectedGuids  = foundGuids;
+          isolateNavIdx  = 0;
+          isolateMode    = true;
+          showIsolateNav();
+        }
       } else {
-        setStatus("No matches");
+        setStatus("No matches in model");
       }
     }
 
@@ -501,6 +507,9 @@
     document.getElementById("btn-showall").onclick = () => {
       viewer.scene.setObjectsVisible(viewer.scene.objectIds, true);
       viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+      viewer.scene.setObjectsSelected(viewer.scene.objectIds, false);
+      exitIsolateMode();
+      clearPBI();
       xrayOn = false;
       document.getElementById("btn-xray").classList.remove("active");
       clearSelection();
