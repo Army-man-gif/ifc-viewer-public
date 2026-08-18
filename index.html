@@ -310,6 +310,7 @@
       if (guids.length === 0 || (totalObjects > 0 && guids.length >= totalObjects)) {
         viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
         viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 0.8 });
+        selectedGuids = [];
         exitIsolateMode();
         setStatus(""); return;
       }
@@ -341,16 +342,17 @@
       if (found > 0) {
         if (animate) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
-        // Activate isolate nav for multi-element PBI selections, hide for single
+        // Always sync selectedGuids so clicks toggle correctly
+        selectedGuids = foundGuids;
+        isolateNavIdx = 0;
         if (foundGuids.length > 1) {
-          selectedGuids  = foundGuids;
-          isolateNavIdx  = 0;
-          isolateMode    = true;
+          isolateMode = true;
           showIsolateNav();
         } else {
           exitIsolateMode();
         }
       } else {
+        selectedGuids = [];
         setStatus("No matches in model");
       }
     }
@@ -386,10 +388,11 @@
         hit.entity.selected = false;
       }
 
+      const lastGuid = selectedGuids[0];
       setStatus(selectedGuids.length > 1
         ? `${selectedGuids.length} elements selected`
         : selectedGuids.length === 1
-          ? `${viewer.metaScene?.metaObjects?.[guid]?.type || "Element"} selected`
+          ? `${viewer.metaScene?.metaObjects?.[lastGuid]?.type || "Element"} selected`
           : ""
       );
 
