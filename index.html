@@ -170,7 +170,7 @@
       backgroundColor: [0.105, 0.105, 0.18]
     });
 
-    viewer.camera.eye  = [-30*CAM_D, 40*CAM_D, 60*CAM_D];
+    viewer.camera.eye  = [-30*CAM_D, 10+30*CAM_D, 60*CAM_D];
     viewer.camera.look = [0, 10, 0];
     viewer.camera.up   = [0, 1, 0];
 
@@ -497,15 +497,16 @@
     };
 
     // ── Preset views ──────────────────────────────────────────────────────────
+    // eye = look + CAM_D * (original_eye - look) — scales distance only, keeps centering
     const PRESETS = {
-      overview: { eye: [-30*CAM_D, 40*CAM_D, 60*CAM_D],  look: [0, 10, 0],  up: [0,1,0] },
-      front:    { eye: [0,  20*CAM_D, 80*CAM_D],     look: [0, 10, 0],  up: [0,1,0] },
-      back:     { eye: [0,  20*CAM_D, -80*CAM_D],    look: [0, 10, 0],  up: [0,1,0] },
-      left:     { eye: [-80*CAM_D, 20*CAM_D, 0],     look: [0, 10, 0],  up: [0,1,0] },
-      right:    { eye: [80*CAM_D,  20*CAM_D, 0],     look: [0, 10, 0],  up: [0,1,0] },
-      top:      { eye: [0,  100*CAM_D, 0.1],     look: [0,  0, 0],  up: [0,0,-1] },
-      roof:     { eye: [-10*CAM_D, 55*CAM_D, 30*CAM_D],  look: [0, 35, 0],  up: [0,1,0] },
-      ground:   { eye: [-20*CAM_D, 5,  40*CAM_D],    look: [0,  3, 0],  up: [0,1,0] },
+      overview: { eye: [-30*CAM_D,      10+30*CAM_D,  60*CAM_D],  look: [0, 10, 0],  up: [0,1,0] },
+      front:    { eye: [0,              10+10*CAM_D,  80*CAM_D],  look: [0, 10, 0],  up: [0,1,0] },
+      back:     { eye: [0,              10+10*CAM_D, -80*CAM_D],  look: [0, 10, 0],  up: [0,1,0] },
+      left:     { eye: [-80*CAM_D,      10+10*CAM_D,  0],         look: [0, 10, 0],  up: [0,1,0] },
+      right:    { eye: [80*CAM_D,       10+10*CAM_D,  0],         look: [0, 10, 0],  up: [0,1,0] },
+      top:      { eye: [0,              100*CAM_D,    0.1],        look: [0,  0, 0],  up: [0,0,-1] },
+      roof:     { eye: [-10*CAM_D,      35+20*CAM_D,  30*CAM_D],  look: [0, 35, 0],  up: [0,1,0] },
+      ground:   { eye: [-20*CAM_D,      3+2*CAM_D,    40*CAM_D],  look: [0,  3, 0],  up: [0,1,0] },
     };
 
     document.getElementById("view-select").onchange = function() {
