@@ -160,6 +160,9 @@
       NavCubePlugin
     } from "https://cdn.jsdelivr.net/npm/@xeokit/xeokit-sdk/dist/xeokit-sdk.min.es.js";
 
+    // CAM_D — camera distance for all views (lower = closer). index.html ~line 164
+    const CAM_D = 0.6;
+
     // ── Viewer setup ──────────────────────────────────────────────────────────
     const viewer = new Viewer({
       canvasId: "canvas",
@@ -494,8 +497,6 @@
     };
 
     // ── Preset views ──────────────────────────────────────────────────────────
-    // CAM_D — camera distance for all views (lower = closer). index.html ~line 497
-    const CAM_D = 0.6;
     const PRESETS = {
       overview: { eye: [-30*CAM_D, 40*CAM_D, 60*CAM_D],  look: [0, 10, 0],  up: [0,1,0] },
       front:    { eye: [0,  20*CAM_D, 80*CAM_D],     look: [0, 10, 0],  up: [0,1,0] },
