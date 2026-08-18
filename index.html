@@ -341,12 +341,14 @@
       if (found > 0) {
         if (animate) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
-        // Activate isolate nav for multi-element PBI selections
+        // Activate isolate nav for multi-element PBI selections, hide for single
         if (foundGuids.length > 1) {
           selectedGuids  = foundGuids;
           isolateNavIdx  = 0;
           isolateMode    = true;
           showIsolateNav();
+        } else {
+          exitIsolateMode();
         }
       } else {
         setStatus("No matches in model");
