@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Schependomlaan Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1a1a2e; overflow: hidden; font-family: sans-serif; }
+    #canvas { width: 100vw; height: 100vh; }
+
+    #toolbar {
+      position: absolute;
+      top: 12px; left: 12px;
+      display: flex; gap: 8px; flex-wrap: wrap;
+      z-index: 10;
+    }
+    button {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      transition: background 0.15s;
+    }
+    button:hover { background: rgba(255,255,255,0.22); }
+    button.active { background: rgba(99,179,237,0.35); border-color: #63b3ed; }
+
+    #status {
+      position: absolute;
+      bottom: 12px; left: 12px;
+      color: rgba(255,255,255,0.5);
+      font-size: 11px;
+      pointer-events: none;
+    }
+
+    #controls-hint {
+      position: absolute;
+      bottom: 28px; right: 120px;
+      color: rgba(255,255,255,0.3);
+      font-size: 10px;
+      text-align: right;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
+    #legend {
+      position: absolute;
+      top: 12px; right: 12px;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+      background: rgba(0,0,0,0.5);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 11px;
+      backdrop-filter: blur(4px);
+    }
+    #legend.visible { display: flex; }
+
+    #nav-cube {
+      position: absolute;
+      bottom: 12px; right: 12px;
+      width: 100px; height: 100px;
+      z-index: 10;
+    }
+
+    #views-dropdown { display: inline-flex; }
+    #views-dropdown select {
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+      outline: none;
+    }
+    #views-dropdown select option { background: #1a1a2e; color: #fff; }
+
+    /* ── Isolate nav bar ──────────────────────────────────────────────── */
+    #isolate-bar {
+      display: none;
+      position: absolute;
+      bottom: 48px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.65);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 6px 14px;
+      color: #fff;
+      font-size: 12px;
+      gap: 12px;
+      align-items: center;
+      backdrop-filter: blur(6px);
+      z-index: 20;
+    }
+    #isolate-bar.visible { display: flex; }
+    #isolate-bar button {
+      background: none; border: none;
+      font-size: 16px; padding: 0 4px;
+      cursor: pointer; color: #fff;
+    }
+    #isolate-bar button:hover { color: #63b3ed; background: none; }
+
+    #meta-canvas {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 20;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <canvas id="nav-cube"></canvas>
+
+  <div id="toolbar">
+    <button id="btn-reset">Reset view</button>
+    <button id="btn-xray">X-ray</button>
+    <button id="btn-isolate">Zoom to selected</button>
+    <button id="btn-showall">Show all</button>
+    <div id="views-dropdown"><select id="view-select">
+      <option value="" disabled selected>📷 Preset views</option>
+      <option value="overview">Overview</option>
+      <option value="front">Front</option>
+      <option value="back">Back</option>
+      <option value="left">Left side</option>
+      <option value="right">Right side</option>
+      <option value="top">Top (plan)</option>
+      <option value="roof">Roof closeup</option>
+      <option value="ground">Ground floor</option>
+    </select></div>
+  </div>
+
+  <!-- Isolate nav: scroll through selected elements -->
+  <div id="isolate-bar">
+    <button id="nav-prev">◀</button>
+    <span id="nav-label">1 / 1</span>
+    <button id="nav-next">▶</button>
+  </div>
+
+  <canvas id="meta-canvas"></canvas>
+
+  <div id="legend"></div>
+  <div id="status">Loading model…</div>
+  <div id="controls-hint">
+    Left drag — rotate &nbsp;|&nbsp; Right drag — pan<br>
+    Scroll — zoom &nbsp;|&nbsp; Click — toggle select
+  </div>
+
+  <script type="module">
+    import {
+      Viewer,
+      XKTLoaderPlugin,
+      NavCubePlugin
+    } from "https://cdn.jsdelivr.net/npm/@xeokit/xeokit-sdk/dist/xeokit-sdk.min.es.js";
+
+    // ── Viewer setup ──────────────────────────────────────────────────────────
+    const viewer = new Viewer({
+      canvasId: "canvas",
+      transparent: false,
+      backgroundColor: [0.105, 0.105, 0.18]
+    });
+
+    viewer.camera.eye  = [-30, 40, 60];
+    viewer.camera.look = [0, 10, 0];
+    viewer.camera.up   = [0, 1, 0];
+
+    // ── 2D canvas text — rendered directly on element ────────────────────────
+    const metaCanvas = document.getElementById("meta-canvas");
+    const ctx2d      = metaCanvas.getContext("2d");
+    let metaLines    = null;   // [{label, value}] to draw
+    let metaWorldPos = null;
+    let metaRafId    = null;
+
+    function resizeMetaCanvas() {
+      metaCanvas.width  = metaCanvas.offsetWidth;
+      metaCanvas.height = metaCanvas.offsetHeight;
+    }
+    resizeMetaCanvas();
+    window.addEventListener("resize", resizeMetaCanvas);
+
+    function projectToScreen(worldPos) {
+      const vm = viewer.camera.viewMatrix;
+      const pm = viewer.camera.projMatrix;
+      const [wx, wy, wz] = worldPos;
+      const vx = vm[0]*wx + vm[4]*wy + vm[8]*wz  + vm[12];
+      const vy = vm[1]*wx + vm[5]*wy + vm[9]*wz  + vm[13];
+      const vz = vm[2]*wx + vm[6]*wy + vm[10]*wz + vm[14];
+      const vw = vm[3]*wx + vm[7]*wy + vm[11]*wz + vm[15];
+      const cx = pm[0]*vx + pm[4]*vy + pm[8]*vz  + pm[12]*vw;
+      const cy = pm[1]*vx + pm[5]*vy + pm[9]*vz  + pm[13]*vw;
+      const cw = pm[3]*vx + pm[7]*vy + pm[11]*vz + pm[15]*vw;
+      if (Math.abs(cw) < 1e-6) return null;
+      return [
+        (cx / cw + 1) * 0.5 * metaCanvas.width,
+        (-cy / cw + 1) * 0.5 * metaCanvas.height,
+      ];
+    }
+
+    function strokeFill(text, x, y, fillColor) {
+      ctx2d.strokeStyle = "rgba(0,0,0,0.95)";
+      ctx2d.lineWidth   = 4;
+      ctx2d.lineJoin    = "round";
+      ctx2d.strokeText(text, x, y);
+      ctx2d.fillStyle = fillColor;
+      ctx2d.fillText(text, x, y);
+    }
+
+    function drawMetaText() {
+      ctx2d.clearRect(0, 0, metaCanvas.width, metaCanvas.height);
+      if (!metaWorldPos || !metaLines) return;
+      const sc = projectToScreen(metaWorldPos);
+      if (!sc) return;
+
+      const [sx, sy] = sc;
+      const lineH = 20;
+      const totalH = lineH * (metaLines.length + 1);
+      let y = sy - totalH / 2;
+
+      ctx2d.shadowColor = "transparent";
+      ctx2d.shadowBlur  = 0;
+
+      // Type header
+      ctx2d.font = "bold 15px sans-serif";
+      ctx2d.textAlign = "center";
+      strokeFill(metaLines[0].value, sx, y, "#ffe066");
+      y += lineH + 4;
+
+      // Data rows
+      ctx2d.font = "12px sans-serif";
+      for (let i = 1; i < metaLines.length; i++) {
+        const { label, value } = metaLines[i];
+        ctx2d.textAlign = "right";
+        strokeFill(label + ":", sx - 5, y, "rgba(255,255,255,0.6)");
+        ctx2d.textAlign = "left";
+        strokeFill(value, sx + 5, y, "#ffffff");
+        y += lineH;
+      }
+
+      metaRafId = requestAnimationFrame(drawMetaText);
+    }
+
+    function clearAnnotation() {
+      metaWorldPos = null;
+      metaLines    = null;
+      if (metaRafId) { cancelAnimationFrame(metaRafId); metaRafId = null; }
+      ctx2d.clearRect(0, 0, metaCanvas.width, metaCanvas.height);
+    }
+
+    new NavCubePlugin(viewer, {
+      canvasElement: document.getElementById("nav-cube"),
+      color: "#2d3748",
+      visible: true,
+      cameraFly: true
+    });
+
+    const loader = new XKTLoaderPlugin(viewer);
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    let selectedGuids  = [];   // ordered list of currently selected GUIDs
+    let isolateNavIdx  = 0;    // which selected element is focused in isolate mode
+    let isolateMode    = false;
+    let xrayOn         = false;
+
+    // ── Parse URL params ──────────────────────────────────────────────────────
+    const params        = new URLSearchParams(window.location.search);
+    const rawGuids      = params.get("highlight") || "";
+    const highlightGuids = rawGuids ? rawGuids.split(",").map(s => s.trim()).filter(Boolean) : [];
+
+    // ── Load model ────────────────────────────────────────────────────────────
+    const model = loader.load({ id: "model", src: "./model.xkt", saoEnabled: true, edges: true });
+
+    model.on("loaded", () => {
+      setStatus("");
+      viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
+      window.parent.postMessage({ type: "ready" }, "*");
+      if (highlightGuids.length > 0) applyHighlight(highlightGuids, null);
+    });
+
+    model.on("error", e => setStatus("Error loading model: " + e));
+
+    // ── postMessage from Power BI ─────────────────────────────────────────────
+    window.addEventListener("message", event => {
+      const msg = event.data;
+      if (!msg || msg.type !== "highlight") return;
+      applyHighlight(msg.guids || [], msg.colorMap || null);
+    });
+
+    // ── Highlight (Power BI → 3D) ─────────────────────────────────────────────
+    function applyHighlight(guids, colorMap) {
+      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, true);
+      viewer.scene.setObjectsPickable(viewer.scene.objectIds, false);
+      viewer.scene.setObjectsColorized(viewer.scene.objectIds, false);
+
+      if (guids.length === 0) {
+        viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+        viewer.scene.setObjectsPickable(viewer.scene.objectIds, true);
+        setStatus(""); return;
+      }
+
+      let minVal = Infinity, maxVal = -Infinity;
+      if (colorMap) for (const v of Object.values(colorMap)) { if (v < minVal) minVal = v; if (v > maxVal) maxVal = v; }
+
+      let found = 0;
+      let aabb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+      for (const guid of guids) {
+        const obj = viewer.scene.objects[guid];
+        if (!obj) continue;
+        obj.xrayed = false; obj.selected = true; obj.pickable = true; found++;
+        if (colorMap && colorMap[guid] != null && maxVal > minVal) {
+          const t = (colorMap[guid] - minVal) / (maxVal - minVal);
+          obj.colorize = [t, 1 - t, 0];
+        }
+        const a = obj.aabb;
+        if (a[0] < aabb[0]) aabb[0] = a[0];
+        if (a[1] < aabb[1]) aabb[1] = a[1];
+        if (a[2] < aabb[2]) aabb[2] = a[2];
+        if (a[3] > aabb[3]) aabb[3] = a[3];
+        if (a[4] > aabb[4]) aabb[4] = a[4];
+        if (a[5] > aabb[5]) aabb[5] = a[5];
+      }
+
+      if (found > 0) {
+        viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
+      } else {
+        setStatus("No matches");
+      }
+    }
+
+    // ── Notify Power BI of selection ──────────────────────────────────────────
+    function notifyPBI() {
+      if (selectedGuids.length === 0) {
+        window.parent.postMessage({ type: "selectionCleared" }, "*");
+      } else {
+        window.parent.postMessage({ type: "selectionChanged", guids: selectedGuids }, "*");
+      }
+    }
+
+    // ── Click handler — click toggles element in/out of selection ────────────
+    viewer.scene.input.on("mouseclicked", coords => {
+      const hit = viewer.scene.pick({ canvasPos: coords });
+
+      if (!hit) {
+        clearSelection();
+        return;
+      }
+
+      const guid = hit.entity.id;
+      const idx  = selectedGuids.indexOf(guid);
+
+      if (idx === -1) {
+        // New element — add to selection
+        selectedGuids.push(guid);
+        hit.entity.selected = true;
+      } else {
+        // Same element — deselect
+        selectedGuids.splice(idx, 1);
+        hit.entity.selected = false;
+      }
+
+      setStatus(selectedGuids.length > 1
+        ? `${selectedGuids.length} elements selected`
+        : selectedGuids.length === 1
+          ? `${viewer.metaScene?.metaObjects?.[guid]?.type || "Element"} selected`
+          : ""
+      );
+
+      exitIsolateMode();
+      notifyPBI();
+    });
+
+    // ── Isolate selected (zoom in, show nav + metadata) ───────────────────────
+    document.getElementById("btn-isolate").onclick = () => {
+      if (selectedGuids.length === 0) return;
+      isolateMode   = true;
+      isolateNavIdx = 0;
+      showIsolateNav();
+      flyToSelected(isolateNavIdx);
+    };
+
+    function flyToSelected(idx) {
+      const guid = selectedGuids[idx];
+      const obj  = viewer.scene.objects[guid];
+      if (!obj) return;
+      viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
+      showMeta(guid);
+      updateNavLabel();
+    }
+
+    function showIsolateNav() {
+      const bar = document.getElementById("isolate-bar");
+      if (selectedGuids.length > 1) bar.classList.add("visible");
+      else bar.classList.remove("visible");
+      updateNavLabel();
+    }
+
+    function updateNavLabel() {
+      document.getElementById("nav-label").textContent =
+        `${isolateNavIdx + 1} / ${selectedGuids.length}`;
+    }
+
+    document.getElementById("nav-prev").onclick = () => {
+      isolateNavIdx = (isolateNavIdx - 1 + selectedGuids.length) % selectedGuids.length;
+      flyToSelected(isolateNavIdx);
+    };
+    document.getElementById("nav-next").onclick = () => {
+      isolateNavIdx = (isolateNavIdx + 1) % selectedGuids.length;
+      flyToSelected(isolateNavIdx);
+    };
+
+    function exitIsolateMode() {
+      isolateMode = false;
+      document.getElementById("isolate-bar").classList.remove("visible");
+      clearAnnotation();
+    }
+
+    // ── Metadata label — projected to element centre in 3D space ────────────
+    function showMeta(guid) {
+      clearAnnotation();
+
+      const meta = viewer.metaScene?.metaObjects?.[guid];
+      const obj  = viewer.scene.objects[guid];
+      if (!obj) return;
+
+      const type = meta?.type?.replace(/^Ifc/, "") || "Element";
+      const name = meta?.name || "—";
+
+      const props = {};
+      (meta?.propertySets || []).forEach(ps =>
+        (ps?.properties || []).forEach(p => { props[p?.name?.toLowerCase()] = p?.value; })
+      );
+
+      const shortGuid = guid.length > 22 ? guid.slice(0, 22) + "…" : guid;
+
+      metaLines = [
+        { label: "",         value: type },
+        { label: "Name",     value: name },
+        { label: "ID",       value: shortGuid },
+        { label: "Material", value: props["referenceid"] || props["material"] || "—" },
+        { label: "External", value: props["isexternal"] != null ? (props["isexternal"] ? "Yes" : "No") : "—" },
+        { label: "U-value",  value: props["thermaltransmittance"] != null ? `${props["thermaltransmittance"]} W/m²K` : "—" },
+      ];
+
+      const aabb = obj.aabb;
+      metaWorldPos = [
+        (aabb[0] + aabb[3]) / 2,
+        (aabb[1] + aabb[4]) / 2,
+        (aabb[2] + aabb[5]) / 2,
+      ];
+
+      // Start drawing after flyTo animation completes
+      setTimeout(() => { drawMetaText(); }, 850);
+
+      setStatus(`Showing: ${type}`);
+    }
+
+
+    // ── Toolbar buttons ───────────────────────────────────────────────────────
+    const clearPBI = () => window.parent.postMessage({ type: "selectionCleared" }, "*");
+
+    function clearSelection() {
+      viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
+      selectedGuids = [];
+      exitIsolateMode();
+      setStatus("");
+      clearPBI();
+    }
+
+    document.getElementById("btn-reset").onclick = () => {
+      viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb });
+      clearSelection();
+    };
+
+    document.getElementById("btn-xray").onclick = function () {
+      xrayOn = !xrayOn;
+      this.classList.toggle("active", xrayOn);
+      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, xrayOn);
+      viewer.scene.setObjectsXRayed(viewer.scene.selectedObjectIds, false);
+    };
+
+    document.getElementById("btn-showall").onclick = () => {
+      viewer.scene.setObjectsVisible(viewer.scene.objectIds, true);
+      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+      xrayOn = false;
+      document.getElementById("btn-xray").classList.remove("active");
+      clearSelection();
+    };
+
+    // ── Preset views ──────────────────────────────────────────────────────────
+    const PRESETS = {
+      overview: { eye: [-30, 40, 60],  look: [0, 10, 0],  up: [0,1,0] },
+      front:    { eye: [0,  20, 80],   look: [0, 10, 0],  up: [0,1,0] },
+      back:     { eye: [0,  20, -80],  look: [0, 10, 0],  up: [0,1,0] },
+      left:     { eye: [-80, 20, 0],   look: [0, 10, 0],  up: [0,1,0] },
+      right:    { eye: [80,  20, 0],   look: [0, 10, 0],  up: [0,1,0] },
+      top:      { eye: [0,  100, 0.1], look: [0,  0, 0],  up: [0,0,-1] },
+      roof:     { eye: [-10, 55, 30],  look: [0, 35, 0],  up: [0,1,0] },
+      ground:   { eye: [-20, 5,  40],  look: [0,  3, 0],  up: [0,1,0] },
+    };
+
+    document.getElementById("view-select").onchange = function() {
+      const preset = PRESETS[this.value];
+      if (!preset) return;
+      viewer.cameraFlight.flyTo({ eye: preset.eye, look: preset.look, up: preset.up, duration: 1.2 });
+      exitIsolateMode();
+      clearPBI();
+      this.value = "";
+    };
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
+    }
+  </script>
+</body>
+</html>
