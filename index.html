@@ -276,6 +276,13 @@
     const rawGuids      = params.get("highlight") || "";
     const highlightGuids = rawGuids ? rawGuids.split(",").map(s => s.trim()).filter(Boolean) : [];
 
+    // ── Load task→GUID map ────────────────────────────────────────────────────
+    let taskGuidMap = {};
+    fetch("./task_guid_map.json")
+      .then(r => r.json())
+      .then(data => { taskGuidMap = data; })
+      .catch(() => {});
+
     // ── Load model ────────────────────────────────────────────────────────────
     const model = loader.load({ id: "model", src: "./model.xkt", saoEnabled: true, edges: true });
 
@@ -293,8 +300,14 @@
     // ── postMessage from Power BI ─────────────────────────────────────────────
     window.addEventListener("message", event => {
       const msg = event.data;
-      if (!msg || msg.type !== "highlight") return;
-      applyHighlight(msg.guids || [], msg.colorMap || null, msg.animate === true);
+      if (!msg) return;
+      if (msg.type === "highlight") {
+        applyHighlight(msg.guids || [], msg.colorMap || null, msg.animate === true);
+      } else if (msg.type === "taskSelected") {
+        const taskIds = (msg.taskIds || []).map(String);
+        const guids = [...new Set(taskIds.flatMap(id => taskGuidMap[id] || []))];
+        applyHighlight(guids, null, true);
+      }
     });
 
     // ── Highlight (Power BI → 3D) ─────────────────────────────────────────────
