@@ -269,6 +269,8 @@
     let selectedGuids  = [];   // ordered list of currently selected GUIDs
     let isolateNavIdx  = 0;    // which selected element is focused in isolate mode
     let isolateMode    = false;
+    let pendingHighlight = null; // latest queued "highlight" message, coalesced per animation frame
+    let highlightRAF     = null;
     let xrayOn         = false;
 
     // ── Parse URL params ──────────────────────────────────────────────────────
@@ -302,7 +304,19 @@
       const msg = event.data;
       if (!msg) return;
       if (msg.type === "highlight") {
-        applyHighlight(msg.guids || [], msg.colorMap || null, msg.animate === true);
+        // Coalesce rapid-fire highlight messages (e.g. dragging a slicer
+        // fires several update() calls within one frame) — only the latest
+        // one actually needs to run; earlier ones would just be immediately
+        // overwritten, so skip applying them at all.
+        pendingHighlight = { guids: msg.guids || [], colorMap: msg.colorMap || null, animate: msg.animate === true };
+        if (!highlightRAF) {
+          highlightRAF = requestAnimationFrame(() => {
+            highlightRAF = null;
+            const h = pendingHighlight;
+            pendingHighlight = null;
+            applyHighlight(h.guids, h.colorMap, h.animate);
+          });
+        }
       } else if (msg.type === "taskSelected") {
         // Building/Site-level tasks (no specific location) are stored as a
         // single "ALL" sentinel instead of enumerating every element GUID —
@@ -319,64 +333,75 @@
     // XRAY_NON_SELECTED — true: ghost non-highlighted elements, false: show them normally. index.html ~line 302
     const XRAY_NON_SELECTED = false;
     function applyHighlight(guids, colorMap, animate) {
-      // Reset only what the PREVIOUS highlight actually touched, not a full
-      // model sweep (viewer.scene.objectIds, ~3,714 elements) every call —
-      // switching between two large filters (e.g. Not Started -> Complete)
-      // was paying O(total model) reset cost on top of O(new selection) work
-      // every single time, regardless of selection size.
-      const prevGuids = selectedGuids;
-      if (prevGuids.length > 0) {
-        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(prevGuids, false);
-        viewer.scene.setObjectsSelected(prevGuids, false);
-        viewer.scene.setObjectsPickable(prevGuids, true);
-        viewer.scene.setObjectsColorized(prevGuids, false);
-      }
       clearAnnotation();
 
       if (guids.length === 0 || (totalObjects > 0 && guids.length >= totalObjects)) {
-        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+        if (selectedGuids.length > 0) {
+          if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(selectedGuids, false);
+          viewer.scene.setObjectsSelected(selectedGuids, false);
+          viewer.scene.setObjectsPickable(selectedGuids, true);
+          viewer.scene.setObjectsColorized(selectedGuids, false);
+        }
         viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 0.8 });
         selectedGuids = [];
         exitIsolateMode();
         setStatus(""); return;
       }
 
-      // Bulk scene-API calls (single batched update each) instead of setting
-      // xrayed/selected/pickable on each object individually in a loop — much
-      // cheaper for large selections since xeokit avoids per-object dirty-flag
-      // overhead N times over.
       const foundGuids = guids.filter(g => viewer.scene.objects[g]);
-      if (XRAY_NON_SELECTED) {
-        viewer.scene.setObjectsXRayed(viewer.scene.objectIds, true);
-        viewer.scene.setObjectsXRayed(foundGuids, false);
+
+      // Diff against the PREVIOUS selection instead of reset-everything-then-
+      // reapply-everything — elements staying selected across the filter
+      // change (e.g. overlapping Floor + Status combinations) are left
+      // completely untouched. For fully disjoint filters (Not Started <->
+      // Complete) this is the same cost as before, but for any overlap it's
+      // real savings, and it's cheap to compute either way (two Set lookups).
+      const prevSet = new Set(selectedGuids);
+      const nextSet = new Set(foundGuids);
+      const toUnselect = selectedGuids.filter(g => !nextSet.has(g));
+      const toSelect    = foundGuids.filter(g => !prevSet.has(g));
+
+      if (toUnselect.length > 0) {
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(toUnselect, false);
+        viewer.scene.setObjectsSelected(toUnselect, false);
+        viewer.scene.setObjectsPickable(toUnselect, true);
+        viewer.scene.setObjectsColorized(toUnselect, false);
       }
-      viewer.scene.setObjectsSelected(foundGuids, true);
-      viewer.scene.setObjectsPickable(foundGuids, true);
+      if (toSelect.length > 0) {
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(toSelect, false);
+        viewer.scene.setObjectsSelected(toSelect, true);
+        viewer.scene.setObjectsPickable(toSelect, true);
+      }
 
-      let minVal = Infinity, maxVal = -Infinity;
-      if (colorMap) for (const v of Object.values(colorMap)) { if (v < minVal) minVal = v; if (v > maxVal) maxVal = v; }
-
-      let aabb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-      for (const guid of foundGuids) {
-        const obj = viewer.scene.objects[guid];
-        if (colorMap && colorMap[guid] != null && maxVal > minVal) {
+      if (colorMap) {
+        let minVal = Infinity, maxVal = -Infinity;
+        for (const v of Object.values(colorMap)) { if (v < minVal) minVal = v; if (v > maxVal) maxVal = v; }
+        for (const guid of foundGuids) {
+          if (colorMap[guid] == null || maxVal <= minVal) continue;
           const t = (colorMap[guid] - minVal) / (maxVal - minVal);
-          obj.colorize = [t, 1 - t, 0];
+          viewer.scene.objects[guid].colorize = [t, 1 - t, 0];
         }
-        const a = obj.aabb;
-        if (a[0] < aabb[0]) aabb[0] = a[0];
-        if (a[1] < aabb[1]) aabb[1] = a[1];
-        if (a[2] < aabb[2]) aabb[2] = a[2];
-        if (a[3] > aabb[3]) aabb[3] = a[3];
-        if (a[4] > aabb[4]) aabb[4] = a[4];
-        if (a[5] > aabb[5]) aabb[5] = a[5];
       }
+
       const found = foundGuids.length;
 
       if (found > 0) {
-        if (animate) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        // Only compute the combined AABB (an O(found) scan) when we're
+        // actually about to fly the camera there — skip it entirely
+        // otherwise, and use xeokit's own bulk getAABB when available rather
+        // than a hand-rolled per-object loop.
+        if (animate) {
+          const aabb = typeof viewer.scene.getAABB === "function"
+            ? viewer.scene.getAABB(foundGuids)
+            : foundGuids.reduce((bb, g) => {
+                const a = viewer.scene.objects[g].aabb;
+                bb[0] = Math.min(bb[0], a[0]); bb[1] = Math.min(bb[1], a[1]); bb[2] = Math.min(bb[2], a[2]);
+                bb[3] = Math.max(bb[3], a[3]); bb[4] = Math.max(bb[4], a[4]); bb[5] = Math.max(bb[5], a[5]);
+                return bb;
+              }, [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+          viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        }
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
-        // Always sync selectedGuids so clicks toggle correctly
         selectedGuids = foundGuids;
         isolateNavIdx = 0;
         if (foundGuids.length > 1) {
