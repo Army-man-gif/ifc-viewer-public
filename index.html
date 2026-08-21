@@ -399,7 +399,18 @@
                 bb[3] = Math.max(bb[3], a[3]); bb[4] = Math.max(bb[4], a[4]); bb[5] = Math.max(bb[5], a[5]);
                 return bb;
               }, [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
-          viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+          // SAO (ambient occlusion) and edge rendering are expensive per-frame
+          // post-process passes — not worth paying for during the ~48 frames
+          // of a fast camera flight where the camera is moving too quickly to
+          // notice anyway. Suspend them for the flight, restore on completion.
+          const wasSAO   = viewer.scene.sao.enabled;
+          const wasEdges = viewer.scene.edges;
+          viewer.scene.sao.enabled = false;
+          viewer.scene.edges = false;
+          viewer.cameraFlight.flyTo({ aabb, duration: 0.8 }, () => {
+            viewer.scene.sao.enabled = wasSAO;
+            viewer.scene.edges = wasEdges;
+          });
         }
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
         selectedGuids = foundGuids;
