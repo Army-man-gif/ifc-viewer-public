@@ -319,31 +319,46 @@
     // XRAY_NON_SELECTED — true: ghost non-highlighted elements, false: show them normally. index.html ~line 302
     const XRAY_NON_SELECTED = false;
     function applyHighlight(guids, colorMap, animate) {
-      viewer.scene.setObjectsXRayed(viewer.scene.objectIds, XRAY_NON_SELECTED);
-      viewer.scene.setObjectsSelected(viewer.scene.objectIds, false);
-      viewer.scene.setObjectsPickable(viewer.scene.objectIds, true);
-      viewer.scene.setObjectsColorized(viewer.scene.objectIds, false);
+      // Reset only what the PREVIOUS highlight actually touched, not a full
+      // model sweep (viewer.scene.objectIds, ~3,714 elements) every call —
+      // switching between two large filters (e.g. Not Started -> Complete)
+      // was paying O(total model) reset cost on top of O(new selection) work
+      // every single time, regardless of selection size.
+      const prevGuids = selectedGuids;
+      if (prevGuids.length > 0) {
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(prevGuids, false);
+        viewer.scene.setObjectsSelected(prevGuids, false);
+        viewer.scene.setObjectsPickable(prevGuids, true);
+        viewer.scene.setObjectsColorized(prevGuids, false);
+      }
       clearAnnotation();
 
       if (guids.length === 0 || (totalObjects > 0 && guids.length >= totalObjects)) {
-        viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(viewer.scene.objectIds, false);
         viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 0.8 });
         selectedGuids = [];
         exitIsolateMode();
         setStatus(""); return;
       }
 
+      // Bulk scene-API calls (single batched update each) instead of setting
+      // xrayed/selected/pickable on each object individually in a loop — much
+      // cheaper for large selections since xeokit avoids per-object dirty-flag
+      // overhead N times over.
+      const foundGuids = guids.filter(g => viewer.scene.objects[g]);
+      if (XRAY_NON_SELECTED) {
+        viewer.scene.setObjectsXRayed(viewer.scene.objectIds, true);
+        viewer.scene.setObjectsXRayed(foundGuids, false);
+      }
+      viewer.scene.setObjectsSelected(foundGuids, true);
+      viewer.scene.setObjectsPickable(foundGuids, true);
+
       let minVal = Infinity, maxVal = -Infinity;
       if (colorMap) for (const v of Object.values(colorMap)) { if (v < minVal) minVal = v; if (v > maxVal) maxVal = v; }
 
-      let found = 0;
       let aabb = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-      const foundGuids = [];
-      for (const guid of guids) {
+      for (const guid of foundGuids) {
         const obj = viewer.scene.objects[guid];
-        if (!obj) continue;
-        obj.xrayed = false; obj.selected = true; obj.pickable = true; found++;
-        foundGuids.push(guid);
         if (colorMap && colorMap[guid] != null && maxVal > minVal) {
           const t = (colorMap[guid] - minVal) / (maxVal - minVal);
           obj.colorize = [t, 1 - t, 0];
@@ -356,6 +371,7 @@
         if (a[4] > aabb[4]) aabb[4] = a[4];
         if (a[5] > aabb[5]) aabb[5] = a[5];
       }
+      const found = foundGuids.length;
 
       if (found > 0) {
         if (animate) viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
