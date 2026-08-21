@@ -304,8 +304,13 @@
       if (msg.type === "highlight") {
         applyHighlight(msg.guids || [], msg.colorMap || null, msg.animate === true);
       } else if (msg.type === "taskSelected") {
+        // Building/Site-level tasks (no specific location) are stored as a
+        // single "ALL" sentinel instead of enumerating every element GUID —
+        // was ~98.8% of task_guid_map.json's size. Expand it here against
+        // whatever's actually loaded, instead of shipping ~18MB of JSON.
         const taskIds = (msg.taskIds || []).map(String);
-        const guids = [...new Set(taskIds.flatMap(id => taskGuidMap[id] || []))];
+        const rawGuids = [...new Set(taskIds.flatMap(id => taskGuidMap[id] || []))];
+        const guids = rawGuids.includes("ALL") ? viewer.scene.objectIds : rawGuids;
         applyHighlight(guids, null, true);
       }
     });
