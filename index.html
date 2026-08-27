@@ -314,7 +314,15 @@
             highlightRAF = null;
             const h = pendingHighlight;
             pendingHighlight = null;
-            const resolvedGuids = h.guids.includes("ALL") ? viewer.scene.objectIds : h.guids;
+            // Resolve synthetic milestone GUIDs (MILESTONE_<Task_ID>) via task_guid_map
+            let resolvedGuids = h.guids.includes("ALL") ? viewer.scene.objectIds : h.guids;
+            if (resolvedGuids.some(g => g.startsWith("MILESTONE_"))) {
+              const taskIds = resolvedGuids
+                .filter(g => g.startsWith("MILESTONE_"))
+                .map(g => g.replace("MILESTONE_", ""));
+              const domainGuids = [...new Set(taskIds.flatMap(id => taskGuidMap[id] || []))];
+              resolvedGuids = domainGuids.includes("ALL") ? viewer.scene.objectIds : domainGuids;
+            }
             applyHighlight(resolvedGuids, h.colorMap, h.animate);
           });
         }
