@@ -314,7 +314,8 @@
             highlightRAF = null;
             const h = pendingHighlight;
             pendingHighlight = null;
-            applyHighlight(h.guids, h.colorMap, h.animate);
+            const resolvedGuids = h.guids.includes("ALL") ? viewer.scene.objectIds : h.guids;
+            applyHighlight(resolvedGuids, h.colorMap, h.animate);
           });
         }
       } else if (msg.type === "taskSelected") {
