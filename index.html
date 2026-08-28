@@ -516,7 +516,7 @@
       const hit = viewer.scene.pick({ canvasPos: coords });
 
       if (!hit) {
-        clearSelection();
+        if (!groupMode) clearSelection();
         return;
       }
 
@@ -541,7 +541,8 @@
           : ""
       );
 
-      exitIsolateMode();
+      // Don't wipe group mode on scene click — only exit if not in group browse
+      if (!groupMode) exitIsolateMode();
       notifyPBI();
     });
 
@@ -606,10 +607,15 @@
       const group = groups[idx];
       if (!group || group.guids.length === 0) return;
       elemIdx = elemIdx ?? 0;
-      groupElemIdx = elemIdx;
-      const guid = group.guids[elemIdx];
-      const obj  = viewer.scene.objects[guid];
+      // Find a valid scene object starting from elemIdx (some GUIDs may not be in scene)
+      let guid, obj;
+      for (let i = 0; i < group.guids.length; i++) {
+        const candidate = group.guids[(elemIdx + i) % group.guids.length];
+        const o = viewer.scene.objects[candidate];
+        if (o) { guid = candidate; obj = o; elemIdx = (elemIdx + i) % group.guids.length; break; }
+      }
       if (!obj) return;
+      groupElemIdx = elemIdx;
       viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
       showMeta(guid);
       zoomedIn = true;
