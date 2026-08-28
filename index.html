@@ -466,7 +466,22 @@
         setStatus(`${found} element${found !== 1 ? "s" : ""} highlighted`);
         selectedGuids = foundGuids;
         isolateNavIdx = 0;
-        if (foundGuids.length > 1) {
+        if (foundGuids.length > GROUP_THRESHOLD) {
+          const built = buildGroups(foundGuids);
+          if (built) {
+            groupMode = true;
+            groups    = built;
+            groupIdx  = 0;
+            isolateMode = true;
+            showIsolateNav();
+            flyToGroup(groupIdx);
+          } else {
+            groupMode = false;
+            isolateMode = true;
+            showIsolateNav();
+          }
+        } else if (foundGuids.length > 1) {
+          groupMode = false;
           isolateMode = true;
           showIsolateNav();
         } else {
@@ -583,24 +598,12 @@
     // ── Isolate selected (zoom in, show nav + metadata) ───────────────────────
     document.getElementById("btn-isolate").onclick = () => {
       if (selectedGuids.length === 0) return;
-      isolateMode = true;
-      if (selectedGuids.length > GROUP_THRESHOLD) {
-        const built = buildGroups(selectedGuids);
-        if (built) {
-          groupMode = true;
-          groups    = built;
-          groupIdx  = 0;
-          showIsolateNav();
-          flyToGroup(groupIdx);
-          return;
-        }
-      }
-      // In group mode, "Zoom to selected" zooms into first element of current group
       if (groupMode) {
+        // In group mode: zoom into first element of current group
         zoomIntoGroup(groupIdx);
         return;
       }
-      groupMode     = false;
+      isolateMode   = true;
       isolateNavIdx = 0;
       showIsolateNav();
       flyToSelected(isolateNavIdx);
