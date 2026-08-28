@@ -137,11 +137,12 @@
     </select></div>
   </div>
 
-  <!-- Isolate nav: scroll through selected elements -->
+  <!-- Isolate nav: scroll through selected elements / groups -->
   <div id="isolate-bar">
     <button id="nav-prev">◀</button>
     <span id="nav-label">1 / 1</span>
     <button id="nav-next">▶</button>
+    <button id="btn-exit-zoom" style="display:none;margin-left:8px;font-size:12px;padding:2px 8px;background:rgba(255,100,100,0.25);border:1px solid rgba(255,100,100,0.6);color:#fff;border-radius:4px;cursor:pointer;">Exit zoom</button>
   </div>
 
   <canvas id="meta-canvas"></canvas>
@@ -283,6 +284,47 @@
     fetch("./task_guid_map.json")
       .then(r => r.json())
       .then(data => { taskGuidMap = data; })
+      .catch(() => {});
+
+    // ── Load element metadata for grouping ───────────────────────────────────
+    // guid → { apartment, floor, trade, phase, construction_type }
+    let elementMeta = {};
+    fetch("./element_metadata.csv")
+      .then(r => r.text())
+      .then(text => {
+        function parseCSVLine(line) {
+          const cols = []; let cur = ""; let inQ = false;
+          for (let ci = 0; ci < line.length; ci++) {
+            const ch = line[ci];
+            if (ch === '"') { inQ = !inQ; }
+            else if (ch === ',' && !inQ) { cols.push(cur.trim()); cur = ""; }
+            else { cur += ch; }
+          }
+          cols.push(cur.trim());
+          return cols;
+        }
+        const lines = text.split("\n");
+        const header = parseCSVLine(lines[0]);
+        const idx = name => header.indexOf(name);
+        const iGuid  = idx("Element_GUID");
+        const iApt   = idx("Apartment");
+        const iFloor = idx("Floor");
+        const iTrade = idx("Trade");
+        const iPhase = idx("Phase");
+        const iCons  = idx("Construction_Type");
+        for (let i = 1; i < lines.length; i++) {
+          const cols = parseCSVLine(lines[i]);
+          const guid = cols[iGuid];
+          if (!guid) continue;
+          elementMeta[guid] = {
+            apartment:         cols[iApt]   || "",
+            floor:             cols[iFloor] || "",
+            trade:             cols[iTrade] || "",
+            phase:             cols[iPhase] || "",
+            construction_type: cols[iCons]  || "",
+          };
+        }
+      })
       .catch(() => {});
 
     // ── Load model ────────────────────────────────────────────────────────────
@@ -479,13 +521,95 @@
       notifyPBI();
     });
 
+    // ── Grouping logic ────────────────────────────────────────────────────────
+    const GROUP_THRESHOLD = 10;
+    const GROUP_ATTRS = ["apartment", "floor", "trade", "phase", "construction_type"];
+
+    let groupMode   = false;  // true when >10 elements and groups found
+    let groups      = [];     // [{label, guids}]
+    let groupIdx    = 0;      // current group index
+    let zoomedIn    = false;  // true when zoomed into first element of group
+
+    function buildGroups(guids) {
+      // Try each attribute in hierarchy order; pick first that gives 2+ groups
+      for (const attr of GROUP_ATTRS) {
+        const buckets = {};
+        for (const g of guids) {
+          const val = elementMeta[g]?.[attr] || "";
+          if (!val) continue;
+          if (!buckets[val]) buckets[val] = [];
+          buckets[val].push(g);
+        }
+        const keys = Object.keys(buckets);
+        if (keys.length >= 2) {
+          // Sort groups largest first
+          keys.sort((a, b) => buckets[b].length - buckets[a].length);
+          const label = attr.charAt(0).toUpperCase() + attr.slice(1).replace("_", " ");
+          return keys.map(k => ({ label: `${label}: ${k}`, guids: buckets[k] }));
+        }
+      }
+      return null; // no useful grouping found
+    }
+
+    function flyToGroup(idx) {
+      const group = groups[idx];
+      const aabb = typeof viewer.scene.getAABB === "function"
+        ? viewer.scene.getAABB(group.guids)
+        : group.guids.reduce((bb, g) => {
+            const a = viewer.scene.objects[g]?.aabb;
+            if (!a) return bb;
+            bb[0] = Math.min(bb[0], a[0]); bb[1] = Math.min(bb[1], a[1]); bb[2] = Math.min(bb[2], a[2]);
+            bb[3] = Math.max(bb[3], a[3]); bb[4] = Math.max(bb[4], a[4]); bb[5] = Math.max(bb[5], a[5]);
+            return bb;
+          }, [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+      viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+      updateNavLabel();
+      document.getElementById("btn-exit-zoom").style.display = "none";
+      zoomedIn = false;
+    }
+
+    function zoomIntoGroup(idx) {
+      const group = groups[idx];
+      if (!group || group.guids.length === 0) return;
+      const guid = group.guids[0];
+      const obj  = viewer.scene.objects[guid];
+      if (!obj) return;
+      viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
+      showMeta(guid);
+      document.getElementById("btn-exit-zoom").style.display = "";
+      zoomedIn = true;
+    }
+
     // ── Isolate selected (zoom in, show nav + metadata) ───────────────────────
     document.getElementById("btn-isolate").onclick = () => {
       if (selectedGuids.length === 0) return;
-      isolateMode   = true;
+      isolateMode = true;
+      if (selectedGuids.length > GROUP_THRESHOLD) {
+        const built = buildGroups(selectedGuids);
+        if (built) {
+          groupMode = true;
+          groups    = built;
+          groupIdx  = 0;
+          showIsolateNav();
+          flyToGroup(groupIdx);
+          return;
+        }
+      }
+      // In group mode, "Zoom to selected" zooms into first element of current group
+      if (groupMode) {
+        zoomIntoGroup(groupIdx);
+        return;
+      }
+      groupMode     = false;
       isolateNavIdx = 0;
       showIsolateNav();
       flyToSelected(isolateNavIdx);
+    };
+
+    document.getElementById("btn-exit-zoom").onclick = () => {
+      if (groupMode) {
+        flyToGroup(groupIdx);
+      }
     };
 
     function flyToSelected(idx) {
@@ -505,22 +629,42 @@
     }
 
     function updateNavLabel() {
-      document.getElementById("nav-label").textContent =
-        `${isolateNavIdx + 1} / ${selectedGuids.length}`;
+      if (groupMode && groups.length > 0) {
+        const g = groups[groupIdx];
+        document.getElementById("nav-label").textContent =
+          `${groupIdx + 1} / ${groups.length}  (${g.label}, ${g.guids.length} el)`;
+      } else {
+        document.getElementById("nav-label").textContent =
+          `${isolateNavIdx + 1} / ${selectedGuids.length}`;
+      }
     }
 
     document.getElementById("nav-prev").onclick = () => {
-      isolateNavIdx = (isolateNavIdx - 1 + selectedGuids.length) % selectedGuids.length;
-      flyToSelected(isolateNavIdx);
+      if (groupMode) {
+        groupIdx = (groupIdx - 1 + groups.length) % groups.length;
+        flyToGroup(groupIdx);
+      } else {
+        isolateNavIdx = (isolateNavIdx - 1 + selectedGuids.length) % selectedGuids.length;
+        flyToSelected(isolateNavIdx);
+      }
     };
     document.getElementById("nav-next").onclick = () => {
-      isolateNavIdx = (isolateNavIdx + 1) % selectedGuids.length;
-      flyToSelected(isolateNavIdx);
+      if (groupMode) {
+        groupIdx = (groupIdx + 1) % groups.length;
+        flyToGroup(groupIdx);
+      } else {
+        isolateNavIdx = (isolateNavIdx + 1) % selectedGuids.length;
+        flyToSelected(isolateNavIdx);
+      }
     };
 
     function exitIsolateMode() {
       isolateMode = false;
+      groupMode   = false;
+      zoomedIn    = false;
+      groups      = [];
       document.getElementById("isolate-bar").classList.remove("visible");
+      document.getElementById("btn-exit-zoom").style.display = "none";
       clearAnnotation();
     }
 
