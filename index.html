@@ -123,6 +123,7 @@
     <button id="btn-reset">Reset view</button>
     <button id="btn-xray">X-ray</button>
     <button id="btn-isolate">Zoom to selected</button>
+    <button id="btn-see-groups" style="display:none;">See groups</button>
     <button id="btn-showall">Show all</button>
     <div id="views-dropdown"><select id="view-select">
       <option value="" disabled selected>📷 Preset views</option>
@@ -139,9 +140,6 @@
 
   <!-- Isolate nav: scroll through selected elements / groups -->
   <div id="isolate-bar">
-    <!-- Shown when >threshold elements: prompt before entering group browse -->
-    <button id="btn-browse-groups" style="display:none;font-size:12px;padding:2px 10px;">Browse groups ▶</button>
-    <!-- Shown once arrows are active (normal isolate or after entering group mode) -->
     <span id="nav-arrows" style="display:none;align-items:center;gap:8px;">
       <button id="nav-prev">◀</button>
       <span id="nav-label">1 / 1</span>
@@ -477,8 +475,11 @@
           zoomedIn   = false;
           groups     = [];
           isolateMode = false;
+          exitGroupNav();
           if (built) {
-            showBrowsePrompt(foundGuids.length, built.length);
+            // Show "See groups" button in toolbar; arrows hidden until user clicks it
+            document.getElementById("btn-see-groups").style.display = "";
+            document.getElementById("btn-see-groups").textContent = "See groups";
           } else {
             // >threshold but no grouping possible → normal arrow nav
             isolateMode = true;
@@ -487,10 +488,12 @@
         } else if (foundGuids.length > 1) {
           groupMode = false;
           pendingGroups = null;
+          exitGroupNav();
           isolateMode = true;
           showIsolateNav();
         } else {
           pendingGroups = null;
+          exitGroupNav();
           exitIsolateMode();
         }
       } else {
@@ -573,7 +576,15 @@
       return null; // no useful grouping found
     }
 
+    function setGroupHighlight(idx) {
+      // Deselect all currently-selected, then select only this group's guids
+      viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
+      const guids = groups[idx].guids;
+      guids.forEach(g => { if (viewer.scene.objects[g]) viewer.scene.objects[g].selected = true; });
+    }
+
     function flyToGroup(idx) {
+      setGroupHighlight(idx);
       const group = groups[idx];
       const aabb = typeof viewer.scene.getAABB === "function"
         ? viewer.scene.getAABB(group.guids)
@@ -623,18 +634,46 @@
       flyToSelected(isolateNavIdx);
     };
 
-    document.getElementById("btn-browse-groups").onclick = () => {
-      if (!pendingGroups) return;
-      groups    = pendingGroups;
-      groupIdx  = 0;
-      groupMode = true;
-      zoomedIn  = false;
-      pendingGroups = null;
-      document.getElementById("btn-browse-groups").style.display = "none";
-      showGroupNav();
-      flyToGroup(groupIdx);
-      updateIsolateBtn();
+    document.getElementById("btn-see-groups").onclick = () => {
+      if (groupMode) {
+        // Exit groups → restore full selection and fly to combined AABB
+        exitGroupNav();
+        viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
+        selectedGuids.forEach(g => { if (viewer.scene.objects[g]) viewer.scene.objects[g].selected = true; });
+        const aabb = typeof viewer.scene.getAABB === "function"
+          ? viewer.scene.getAABB(selectedGuids)
+          : selectedGuids.reduce((bb, g) => {
+              const a = viewer.scene.objects[g]?.aabb;
+              if (!a) return bb;
+              bb[0] = Math.min(bb[0], a[0]); bb[1] = Math.min(bb[1], a[1]); bb[2] = Math.min(bb[2], a[2]);
+              bb[3] = Math.max(bb[3], a[3]); bb[4] = Math.max(bb[4], a[4]); bb[5] = Math.max(bb[5], a[5]);
+              return bb;
+            }, [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+        viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
+        document.getElementById("btn-see-groups").textContent = "See groups";
+        updateIsolateBtn();
+      } else {
+        // Enter group mode
+        if (!pendingGroups) return;
+        groups    = pendingGroups;
+        groupIdx  = 0;
+        groupMode = true;
+        zoomedIn  = false;
+        pendingGroups = null;
+        document.getElementById("btn-see-groups").textContent = "Exit groups";
+        showGroupNav();
+        flyToGroup(groupIdx);
+        updateIsolateBtn();
+      }
     };
+
+    function exitGroupNav() {
+      groupMode = false;
+      zoomedIn  = false;
+      groups    = [];
+      document.getElementById("nav-arrows").style.display = "none";
+      document.getElementById("isolate-bar").classList.remove("visible");
+    }
 
     function flyToSelected(idx) {
       const guid = selectedGuids[idx];
@@ -645,18 +684,9 @@
       updateNavLabel();
     }
 
-    function showBrowsePrompt(total, numGroups) {
-      const bar = document.getElementById("isolate-bar");
-      bar.classList.add("visible");
-      const btn = document.getElementById("btn-browse-groups");
-      btn.textContent = `${total} elements — Browse ${numGroups} groups ▶`;
-      btn.style.display = "";
-      document.getElementById("nav-arrows").style.display = "none";
-    }
-
     function showGroupNav() {
+      document.getElementById("isolate-bar").classList.add("visible");
       document.getElementById("nav-arrows").style.display = "inline-flex";
-      document.getElementById("btn-browse-groups").style.display = "none";
       updateNavLabel();
     }
 
@@ -664,7 +694,6 @@
       const bar = document.getElementById("isolate-bar");
       if (selectedGuids.length > 1) {
         bar.classList.add("visible");
-        document.getElementById("btn-browse-groups").style.display = "none";
         document.getElementById("nav-arrows").style.display = "inline-flex";
       } else {
         bar.classList.remove("visible");
@@ -709,8 +738,9 @@
       groups        = [];
       pendingGroups = null;
       document.getElementById("isolate-bar").classList.remove("visible");
-      document.getElementById("btn-browse-groups").style.display = "none";
       document.getElementById("nav-arrows").style.display = "none";
+      document.getElementById("btn-see-groups").style.display = "none";
+      document.getElementById("btn-see-groups").textContent = "See groups";
       updateIsolateBtn();
       clearAnnotation();
     }
