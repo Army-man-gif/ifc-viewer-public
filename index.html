@@ -553,7 +553,8 @@
     let pendingGroups  = null;   // built groups waiting for user to click Browse
     let groups         = [];     // [{label, guids}]
     let groupIdx       = 0;
-    let zoomedIn       = false;
+    let zoomedIn       = false;  // true when inside a group scrolling elements
+    let groupElemIdx   = 0;      // index within current group's elements when zoomedIn
 
     function buildGroups(guids) {
       // Try each attribute in hierarchy order; pick first that gives 2+ groups
@@ -601,15 +602,18 @@
       updateIsolateBtn();
     }
 
-    function zoomIntoGroup(idx) {
+    function zoomIntoGroup(idx, elemIdx) {
       const group = groups[idx];
       if (!group || group.guids.length === 0) return;
-      const guid = group.guids[0];
+      elemIdx = elemIdx ?? 0;
+      groupElemIdx = elemIdx;
+      const guid = group.guids[elemIdx];
       const obj  = viewer.scene.objects[guid];
       if (!obj) return;
       viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
       showMeta(guid);
       zoomedIn = true;
+      updateNavLabel();
       updateIsolateBtn();
     }
 
@@ -624,8 +628,8 @@
     document.getElementById("btn-isolate").onclick = () => {
       if (selectedGuids.length === 0) return;
       if (groupMode) {
-        if (zoomedIn) { flyToGroup(groupIdx); }
-        else          { zoomIntoGroup(groupIdx); }
+        if (zoomedIn) { flyToGroup(groupIdx); }   // exit element nav → back to group nav
+        else          { zoomIntoGroup(groupIdx, 0); }  // enter element nav
         return;
       }
       isolateMode   = true;
@@ -659,7 +663,7 @@
         groupIdx  = 0;
         groupMode = true;
         zoomedIn  = false;
-        pendingGroups = null;
+        // keep pendingGroups so re-entry works after exiting
         document.getElementById("btn-see-groups").textContent = "Exit groups";
         showGroupNav();
         flyToGroup(groupIdx);
@@ -668,6 +672,7 @@
     };
 
     function exitGroupNav() {
+      if (groups.length > 0) pendingGroups = groups; // preserve for re-entry
       groupMode = false;
       zoomedIn  = false;
       groups    = [];
@@ -702,7 +707,11 @@
     }
 
     function updateNavLabel() {
-      if (groupMode && groups.length > 0) {
+      if (groupMode && zoomedIn && groups.length > 0) {
+        const g = groups[groupIdx];
+        document.getElementById("nav-label").textContent =
+          `${groupElemIdx + 1} / ${g.guids.length}  (${g.label})`;
+      } else if (groupMode && groups.length > 0) {
         const g = groups[groupIdx];
         document.getElementById("nav-label").textContent =
           `${groupIdx + 1} / ${groups.length}  (${g.label}, ${g.guids.length} el)`;
@@ -713,7 +722,10 @@
     }
 
     document.getElementById("nav-prev").onclick = () => {
-      if (groupMode) {
+      if (groupMode && zoomedIn) {
+        const len = groups[groupIdx].guids.length;
+        zoomIntoGroup(groupIdx, (groupElemIdx - 1 + len) % len);
+      } else if (groupMode) {
         groupIdx = (groupIdx - 1 + groups.length) % groups.length;
         flyToGroup(groupIdx);
       } else {
@@ -722,7 +734,10 @@
       }
     };
     document.getElementById("nav-next").onclick = () => {
-      if (groupMode) {
+      if (groupMode && zoomedIn) {
+        const len = groups[groupIdx].guids.length;
+        zoomIntoGroup(groupIdx, (groupElemIdx + 1) % len);
+      } else if (groupMode) {
         groupIdx = (groupIdx + 1) % groups.length;
         flyToGroup(groupIdx);
       } else {
