@@ -643,10 +643,10 @@
       if (!obj) return;
       groupElemIdx = elemIdx;
       viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
-      showMeta(guid);
       zoomedIn = true;
       updateNavLabel();
       updateIsolateBtn();
+      try { showMeta(guid); } catch(e) { console.warn("showMeta error:", e); }
     }
 
     function updateIsolateBtn() {
@@ -717,8 +717,8 @@
       const obj  = viewer.scene.objects[guid];
       if (!obj) return;
       viewer.cameraFlight.flyTo({ aabb: obj.aabb, duration: 0.8 });
-      showMeta(guid);
       updateNavLabel();
+      try { showMeta(guid); } catch(e) { console.warn("showMeta error:", e); }
     }
 
     function showGroupNav() {
