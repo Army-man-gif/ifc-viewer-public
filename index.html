@@ -505,6 +505,7 @@
         selectedGuids = [];
         setStatus("No matches in model");
       }
+      window.parent.postMessage({ type: "highlightApplied", count: selectedGuids.length }, "*");
     }
 
     // ── Notify Power BI of selection ──────────────────────────────────────────
