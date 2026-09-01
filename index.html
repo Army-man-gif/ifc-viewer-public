@@ -242,10 +242,20 @@
       ctx2d.font = "12px sans-serif";
       for (let i = 1; i < metaLines.length; i++) {
         const { label, value } = metaLines[i];
-        ctx2d.textAlign = "right";
-        strokeFill(label + ":", sx - 5, y, "rgba(255,255,255,0.6)");
-        ctx2d.textAlign = "left";
-        strokeFill(value, sx + 5, y, "#ffffff");
+        if (label.startsWith("─")) {
+          // Separator — draw centered dim line
+          ctx2d.textAlign = "center";
+          strokeFill(label, sx, y, "rgba(255,255,255,0.25)");
+        } else if (!label) {
+          // Continuation line (apartment, sub-phase, variance) — centred, dimmer
+          ctx2d.textAlign = "center";
+          strokeFill(value, sx, y, "rgba(255,255,255,0.7)");
+        } else {
+          ctx2d.textAlign = "right";
+          strokeFill(label + ":", sx - 5, y, "rgba(255,255,255,0.6)");
+          ctx2d.textAlign = "left";
+          strokeFill(value, sx + 5, y, "#ffffff");
+        }
         y += lineH;
       }
 
@@ -286,6 +296,13 @@
     const taskGuidMapReady = fetch("./task_guid_map.json")
       .then(r => r.json())
       .then(data => { taskGuidMap = data; })
+      .catch(() => {});
+
+    // ── Load enriched per-element popup data ─────────────────────────────────
+    let guidMetaMap = {};
+    fetch("./guid_meta_map.json")
+      .then(r => r.json())
+      .then(data => { guidMetaMap = data; })
       .catch(() => {});
 
     // ── Load element metadata for grouping ───────────────────────────────────
@@ -770,6 +787,15 @@
       clearAnnotation();
     }
 
+    // ── Phase translation (Dutch → English) ──────────────────────────────────
+    const PHASE_TRANSLATE = {
+      'UITVOERING':    'Execution',
+      'VOORBEREIDING': 'Preparation',
+      'ONTWERP':       'Design',
+      'OPLEVERING':    'Completion',
+      'SLOOP':         'Demolition',
+    };
+
     // ── Metadata label — projected to element centre in 3D space ────────────
     function showMeta(guid) {
       clearAnnotation();
@@ -778,23 +804,58 @@
       const obj  = viewer.scene.objects[guid];
       if (!obj) return;
 
-      const type = meta?.type?.replace(/^Ifc/, "") || "Element";
-      const name = meta?.name || "—";
-
+      // IFC props for external flag (still from xeokit)
       const props = {};
       (meta?.propertySets || []).forEach(ps =>
         (ps?.properties || []).forEach(p => { props[p?.name?.toLowerCase()] = p?.value; })
       );
+      const externalVal = props["isexternal"] != null ? (props["isexternal"] ? "Yes" : "No") : "—";
 
-      const shortGuid = guid.length > 22 ? guid.slice(0, 22) + "…" : guid;
+      // Enriched data from guid_meta_map.json
+      const em = guidMetaMap[guid] || {};
+      const constructionType = em.Construction_Type || meta?.type?.replace(/^Ifc/, "") || "Element";
+      const floor     = em.Floor     || "—";
+      const apartment = em.Apartment || "Common Areas";
+
+      // Phase with optional Dutch original
+      const phaseRaw = em.Phase || "";
+      const phaseEng = PHASE_TRANSLATE[phaseRaw] || phaseRaw;
+      const showOriginalPhase = phaseRaw && phaseEng !== phaseRaw;
+
+      const status   = em.Status            || "—";
+      const trade    = em.Trade_Discipline  || "—";
+      const respParty= em.Responsible_Party || "—";
+      const duration = em.Duration          ? `${em.Duration} hrs` : "—";
+      const weather  = em.Weather_Dependent || "—";
+      const taskCount= em.Task_Match_Count  || "0";
+
+      const budgeted = em.Budgeted_Cost_EUR ? `€${Math.round(parseFloat(em.Budgeted_Cost_EUR))}` : "—";
+      const variance = em.Variance_EUR ? parseFloat(em.Variance_EUR) : null;
+      let varianceLine = null;
+      if (variance !== null && em.Budgeted_Cost_EUR) {
+        const sign  = variance >= 0 ? "Over" : "Under";
+        varianceLine = `${sign} budget: €${Math.abs(Math.round(variance))}`;
+      }
+      const payment = em.Payment_Status || "—";
 
       metaLines = [
-        { label: "",         value: type },
-        { label: "Name",     value: name },
-        { label: "ID",       value: shortGuid },
-        { label: "Material", value: props["referenceid"] || props["material"] || "—" },
-        { label: "External", value: props["isexternal"] != null ? (props["isexternal"] ? "Yes" : "No") : "—" },
-        { label: "U-value",  value: props["thermaltransmittance"] != null ? `${props["thermaltransmittance"]} W/m²K` : "—" },
+        { label: "",         value: `${constructionType} · ${floor}` },
+        { label: "",         value: apartment },
+        { label: "─────────────────", value: "" },
+        { label: "Phase",    value: phaseEng || "—" },
+        ...(showOriginalPhase ? [{ label: "",  value: `(${phaseRaw})` }] : []),
+        { label: "Status",   value: status },
+        { label: "Type",     value: trade },
+        { label: "External", value: externalVal },
+        { label: "By",       value: respParty },
+        { label: "─────────────────", value: "" },
+        { label: "Duration", value: duration },
+        { label: "Weather",  value: weather },
+        { label: "Tasks",    value: taskCount },
+        { label: "─────────────────", value: "" },
+        { label: "Cost",     value: budgeted },
+        ...(varianceLine ? [{ label: "", value: varianceLine }] : []),
+        { label: "Payment",  value: payment },
       ];
 
       const aabb = obj.aabb;
