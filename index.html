@@ -334,8 +334,12 @@
 
     let totalObjects = 0;
     model.on("loaded", () => {
-      // objectIds may not be populated yet at "loaded"; objects map is reliable
-      totalObjects = Object.keys(viewer.scene.objects).length || viewer.scene.objectIds.length || 0;
+      // Prefer __totalElements__ from task_guid_map.json (exact element_metadata row count);
+      // fall back to xeokit scene object count if the map hasn't loaded yet.
+      totalObjects = taskGuidMap.__totalElements__
+        || Object.keys(viewer.scene.objects).length
+        || viewer.scene.objectIds.length
+        || 0;
       setStatus("");
       viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
       window.parent.postMessage({ type: "ready", totalEntities: totalObjects }, "*");
