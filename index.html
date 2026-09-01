@@ -283,7 +283,7 @@
 
     // ── Load task→GUID map ────────────────────────────────────────────────────
     let taskGuidMap = {};
-    fetch("./task_guid_map.json")
+    const taskGuidMapReady = fetch("./task_guid_map.json")
       .then(r => r.json())
       .then(data => { taskGuidMap = data; })
       .catch(() => {});
@@ -334,16 +334,21 @@
 
     let totalObjects = 0;
     model.on("loaded", () => {
-      // Prefer __totalElements__ from task_guid_map.json (exact element_metadata row count);
-      // fall back to xeokit scene object count if the map hasn't loaded yet.
-      totalObjects = taskGuidMap.__totalElements__
-        || Object.keys(viewer.scene.objects).length
-        || viewer.scene.objectIds.length
-        || 0;
-      setStatus("");
-      viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
-      window.parent.postMessage({ type: "ready", totalEntities: totalObjects }, "*");
-      if (highlightGuids.length > 0) applyHighlight(highlightGuids, null);
+      // Wait for task_guid_map.json so __totalElements__ is available before
+      // computing totalObjects — if model loads before the fetch resolves,
+      // the fallback would use xeokit's smaller object count (~862) instead
+      // of the correct element_metadata row count (3714), causing large
+      // status filters to hit the "show all" early-return threshold.
+      taskGuidMapReady.finally(() => {
+        totalObjects = taskGuidMap.__totalElements__
+          || Object.keys(viewer.scene.objects).length
+          || viewer.scene.objectIds.length
+          || 0;
+        setStatus("");
+        viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
+        window.parent.postMessage({ type: "ready", totalEntities: totalObjects }, "*");
+        if (highlightGuids.length > 0) applyHighlight(highlightGuids, null);
+      });
     });
 
     model.on("error", e => setStatus("Error loading model: " + e));
