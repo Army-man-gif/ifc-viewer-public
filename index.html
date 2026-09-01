@@ -408,27 +408,18 @@
 
       const foundGuids = guids.filter(g => viewer.scene.objects[g]);
 
-      // Diff against the PREVIOUS selection instead of reset-everything-then-
-      // reapply-everything — elements staying selected across the filter
-      // change (e.g. overlapping Floor + Status combinations) are left
-      // completely untouched. For fully disjoint filters (Not Started <->
-      // Complete) this is the same cost as before, but for any overlap it's
-      // real savings, and it's cheap to compute either way (two Set lookups).
-      const prevSet = new Set(selectedGuids);
-      const nextSet = new Set(foundGuids);
-      const toUnselect = selectedGuids.filter(g => !nextSet.has(g));
-      const toSelect    = foundGuids.filter(g => !prevSet.has(g));
-
-      if (toUnselect.length > 0) {
-        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(toUnselect, false);
-        viewer.scene.setObjectsSelected(toUnselect, false);
-        viewer.scene.setObjectsPickable(toUnselect, true);
-        viewer.scene.setObjectsColorized(toUnselect, false);
+      // Clear all currently-selected objects (including any from group-nav clicks
+      // which bypass selectedGuids tracking), then apply the new set cleanly.
+      if (viewer.scene.selectedObjectIds.length > 0) {
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(viewer.scene.selectedObjectIds, false);
+        viewer.scene.setObjectsColorized(viewer.scene.selectedObjectIds, false);
+        viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
+        viewer.scene.setObjectsPickable(viewer.scene.selectedObjectIds, true);
       }
-      if (toSelect.length > 0) {
-        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(toSelect, false);
-        viewer.scene.setObjectsSelected(toSelect, true);
-        viewer.scene.setObjectsPickable(toSelect, true);
+      if (foundGuids.length > 0) {
+        if (XRAY_NON_SELECTED) viewer.scene.setObjectsXRayed(foundGuids, false);
+        viewer.scene.setObjectsSelected(foundGuids, true);
+        viewer.scene.setObjectsPickable(foundGuids, true);
       }
 
       if (colorMap) {
