@@ -334,7 +334,8 @@
 
     let totalObjects = 0;
     model.on("loaded", () => {
-      totalObjects = viewer.scene.objectIds.length;
+      // objectIds may not be populated yet at "loaded"; objects map is reliable
+      totalObjects = Object.keys(viewer.scene.objects).length || viewer.scene.objectIds.length || 0;
       setStatus("");
       viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
       window.parent.postMessage({ type: "ready", totalEntities: totalObjects }, "*");
