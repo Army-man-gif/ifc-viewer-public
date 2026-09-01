@@ -227,7 +227,12 @@
       const [sx, sy] = sc;
       const lineH = 20;
       const totalH = lineH * (metaLines.length + 1);
-      let y = sy - totalH / 2;
+      // Keep popup clear of the isolate-bar (bottom ~90px) and toolbar (top ~50px)
+      const barClearance = document.getElementById("isolate-bar").classList.contains("visible") ? 96 : 16;
+      const maxBottom = metaCanvas.height - barClearance;
+      const minTop    = 50;
+      let y = Math.min(sy - totalH / 2, maxBottom - totalH);
+      y = Math.max(y, minTop);
 
       ctx2d.shadowColor = "transparent";
       ctx2d.shadowBlur  = 0;
