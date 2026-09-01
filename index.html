@@ -337,7 +337,7 @@
       totalObjects = viewer.scene.objectIds.length;
       setStatus("");
       viewer.cameraFlight.flyTo({ aabb: viewer.scene.aabb, duration: 1 });
-      window.parent.postMessage({ type: "ready" }, "*");
+      window.parent.postMessage({ type: "ready", totalEntities: totalObjects }, "*");
       if (highlightGuids.length > 0) applyHighlight(highlightGuids, null);
     });
 
