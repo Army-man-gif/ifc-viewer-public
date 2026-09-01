@@ -653,6 +653,7 @@
       const btn = document.getElementById("btn-isolate");
       if (groupMode && zoomedIn)   btn.textContent = "Exit group";
       else if (groupMode)          btn.textContent = "See within group";
+      else if (isolateMode)        btn.textContent = "Exit zoom";
       else                         btn.textContent = "Zoom to selected";
     }
 
@@ -662,6 +663,21 @@
       if (groupMode) {
         if (zoomedIn) { clearAnnotation(); flyToGroup(groupIdx); }   // exit element nav → back to group nav
         else          { zoomIntoGroup(groupIdx, 0); }  // enter element nav
+        return;
+      }
+      if (isolateMode) {
+        // Already zoomed — fly back to full selection and reset button
+        isolateMode = false;
+        updateIsolateBtn();
+        clearAnnotation();
+        const aabb = selectedGuids.reduce((bb, g) => {
+          const a = viewer.scene.objects[g]?.aabb;
+          if (!a) return bb;
+          bb[0] = Math.min(bb[0], a[0]); bb[1] = Math.min(bb[1], a[1]); bb[2] = Math.min(bb[2], a[2]);
+          bb[3] = Math.max(bb[3], a[3]); bb[4] = Math.max(bb[4], a[4]); bb[5] = Math.max(bb[5], a[5]);
+          return bb;
+        }, [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity]);
+        viewer.cameraFlight.flyTo({ aabb, duration: 0.8 });
         return;
       }
       isolateMode   = true;
