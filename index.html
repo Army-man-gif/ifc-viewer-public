@@ -576,10 +576,12 @@
     }
 
     function setGroupHighlight(idx) {
-      // Deselect all currently-selected, then select only this group's guids
-      viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
-      const guids = groups[idx].guids;
-      guids.forEach(g => { if (viewer.scene.objects[g]) viewer.scene.objects[g].selected = true; });
+      // Use setObjectsSelected so selectedObjectIds stays accurate for applyHighlight's clear step
+      if (viewer.scene.selectedObjectIds.length > 0)
+        viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
+      const guids = groups[idx].guids.filter(g => viewer.scene.objects[g]);
+      if (guids.length > 0) viewer.scene.setObjectsSelected(guids, true);
+      selectedGuids = guids;
     }
 
     function flyToGroup(idx) {
