@@ -838,24 +838,34 @@
       }
       const payment = em.Payment_Status || "—";
 
-      metaLines = [
-        { label: "",         value: `${constructionType} · ${floor}` },
-        { label: "",         value: apartment },
-        { label: "─────────────────", value: "" },
-        { label: "Phase",    value: phaseEng || "—" },
-        ...(showOriginalPhase ? [{ label: "",  value: `(${phaseRaw})` }] : []),
-        { label: "Status",   value: status },
-        { label: "Type",     value: trade },
-        { label: "External", value: externalVal },
-        { label: "By",       value: respParty },
-        { label: "─────────────────", value: "" },
-        { label: "Duration", value: duration },
-        { label: "Weather",  value: weather },
-        { label: "Tasks",    value: taskCount },
-        { label: "─────────────────", value: "" },
-        { label: "Cost",     value: budgeted },
+      const row = (label, value) => (value && value !== "—" && value !== "0") ? [{ label, value }] : [];
+      const sep = () => [{ label: "─────────────────", value: "" }];
+
+      const schedRows = [
+        ...row("Phase",    phaseEng),
+        ...(showOriginalPhase ? [{ label: "", value: `(${phaseRaw})` }] : []),
+        ...row("Status",   status),
+        ...row("Type",     trade),
+        ...(externalVal !== "—" ? [{ label: "External", value: externalVal }] : []),
+        ...row("By",       respParty),
+      ];
+      const statRows = [
+        ...row("Duration", duration),
+        ...row("Weather",  weather),
+        ...row("Tasks",    taskCount),
+      ];
+      const costRows = [
+        ...row("Cost",     budgeted),
         ...(varianceLine ? [{ label: "", value: varianceLine }] : []),
-        { label: "Payment",  value: payment },
+        ...row("Payment",  payment),
+      ];
+
+      metaLines = [
+        { label: "", value: `${constructionType} · ${floor}` },
+        ...(apartment && apartment !== "Common Areas" || em.Apartment === "" ? [{ label: "", value: apartment }] : [{ label: "", value: "Common Areas" }]),
+        ...(schedRows.length ? [...sep(), ...schedRows] : []),
+        ...(statRows.length  ? [...sep(), ...statRows]  : []),
+        ...(costRows.length  ? [...sep(), ...costRows]  : []),
       ];
 
       const aabb = obj.aabb;
