@@ -660,7 +660,7 @@
     document.getElementById("btn-isolate").onclick = () => {
       if (selectedGuids.length === 0) return;
       if (groupMode) {
-        if (zoomedIn) { flyToGroup(groupIdx); }   // exit element nav → back to group nav
+        if (zoomedIn) { clearAnnotation(); flyToGroup(groupIdx); }   // exit element nav → back to group nav
         else          { zoomIntoGroup(groupIdx, 0); }  // enter element nav
         return;
       }
@@ -673,6 +673,7 @@
     document.getElementById("btn-see-groups").onclick = () => {
       if (groupMode) {
         // Exit groups → restore full selection and fly to combined AABB
+        clearAnnotation();
         exitGroupNav();
         viewer.scene.setObjectsSelected(viewer.scene.selectedObjectIds, false);
         selectedGuids.forEach(g => { if (viewer.scene.objects[g]) viewer.scene.objects[g].selected = true; });
