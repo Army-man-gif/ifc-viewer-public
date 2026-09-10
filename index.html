@@ -198,26 +198,24 @@
       margin-top: 4px; letter-spacing: 0.05em;
     }
 
-    /* open spread — wraps both pages, animates open from spine */
+    /* open spread */
     .book-spread {
       display: none;
       width: 320px;
       height: 200px;
       position: relative;
-      perspective: 900px;
-      transform-style: preserve-3d;
+      perspective: 800px;
+      opacity: 0;
+      transform: scale(0.96);
+      transition: opacity 0.4s ease, transform 0.4s ease;
     }
     .book-spread.visible { display: block; }
-    /* the inner container that actually rotates open */
+    .book-spread.open    { opacity: 1; transform: scale(1); }
+    /* the inner container — no 3D rotation, just a wrapper */
     .spread-inner {
       width: 100%; height: 100%;
       position: relative;
-      transform-origin: left center;
-      transform: rotateY(-90deg);
-      transition: transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
-    .spread-inner.open  { transform: rotateY(0deg); }
-    .spread-inner.close { transform: rotateY(-90deg); }
 
     /* left + right page halves */
     .book-page {
@@ -530,14 +528,12 @@
       bookSpreadIdx = 0;
       setSpread(0);
 
-      // Cover fades/rotates away, spread swings open
       bookCover.classList.add("closing");
       bookSpread.classList.add("visible");
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          spreadInner.classList.add("open");
-          spreadInner.classList.remove("close");
+          bookSpread.classList.add("open");
         });
       });
 
@@ -553,12 +549,10 @@
       bookFlipper.classList.remove("flip-right");
       bookFlipper.style.display = "none";
 
-      // Swing closed then show cover
-      spreadInner.classList.remove("open");
-      spreadInner.classList.add("close");
+      bookSpread.classList.remove("open");
 
-      spreadInner.addEventListener("transitionend", function handler() {
-        spreadInner.removeEventListener("transitionend", handler);
+      bookSpread.addEventListener("transitionend", function handler() {
+        bookSpread.removeEventListener("transitionend", handler);
         bookSpread.classList.remove("visible");
         bookCover.style.display = "";
       }, { once: true });
@@ -688,8 +682,7 @@
       bookOpen = false;
       bookFlipper.classList.remove("flip-right");
       bookFlipper.style.display = "none";
-      bookSpread.classList.remove("visible");
-      spreadInner.classList.remove("open", "close");
+      bookSpread.classList.remove("visible", "open");
       bookCover.style.display = "";
       bookCover.classList.remove("closing");
     }
@@ -1323,8 +1316,7 @@
       setTimeout(() => {
         bookOpen = false;
         bookFlipper.style.display = "none";
-        bookSpread.classList.remove("visible");
-        spreadInner.classList.remove("open", "close");
+        bookSpread.classList.remove("visible", "open");
         bookCover.style.display = "";
         bookCover.classList.remove("closing");
         bookPopup.classList.add("visible");
