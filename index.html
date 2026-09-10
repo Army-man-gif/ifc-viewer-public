@@ -529,31 +529,32 @@
       if (bookFlipping) return;
       const p = bookPages[prevIdx];
 
-      // Flipping left page back: flipper sits on left half, pre-rotated -180° then animates to 0°
-      flipperFront.innerHTML = bookLeft.innerHTML;
-      flipperBack.innerHTML  = p.right;
-      bookFlipper.style.left = "0";
+      // Left half lifts and swings toward the spine (right edge) — opposite of forward flip
+      flipperFront.innerHTML = bookLeft.innerHTML; // front = current left page
+      flipperBack.innerHTML  = p.right;             // back  = previous right page
+      bookFlipper.style.left            = "0";
       bookFlipper.style.transformOrigin = "right center";
-      bookFlipper.style.display = "block";
+      bookFlipper.style.display         = "block";
 
-      // Start fully flipped
+      // Start flat (front visible), animate to fully rotated (back = prev right visible)
       bookFlipper.style.transition = "none";
-      bookFlipper.style.transform  = "rotateY(180deg)";
-      bookLeft.innerHTML = p.left;
+      bookFlipper.style.transform  = "rotateY(0deg)";
+      bookLeft.innerHTML = p.left; // prev left sits underneath, revealed after animation
 
       bookFlipping = true;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          bookFlipper.style.transition = "";
-          bookFlipper.style.transform  = "rotateY(0deg)";
+          bookFlipper.style.transition = "transform 0.45s cubic-bezier(0.645, 0.045, 0.355, 1.000)";
+          bookFlipper.style.transform  = "rotateY(180deg)";
         });
       });
 
       bookFlipper.addEventListener("transitionend", function handler() {
         bookFlipper.removeEventListener("transitionend", handler);
         bookRight.innerHTML = p.right;
-        bookFlipper.style.display = "none";
-        bookFlipper.style.transform = "";
+        bookFlipper.style.display    = "none";
+        bookFlipper.style.transition = "";
+        bookFlipper.style.transform  = "";
         bookSpreadIdx = prevIdx;
         renderDots();
         bookFlipping = false;
