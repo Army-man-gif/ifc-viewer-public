@@ -113,6 +113,185 @@
       pointer-events: none;
       z-index: 20;
     }
+
+    /* ── Book popup ────────────────────────────────────────────────────── */
+    #book-popup {
+      position: absolute;
+      z-index: 30;
+      display: none;
+      cursor: pointer;
+      /* centred on the element — JS sets left/top */
+      transform: translate(-50%, -50%);
+      filter: drop-shadow(0 8px 24px rgba(0,0,0,0.7));
+    }
+    #book-popup.visible { display: block; }
+
+    /* closed = just the cover, a tall narrow book */
+    .book-cover {
+      width: 120px;
+      height: 170px;
+      background: linear-gradient(160deg, #1c2e4a 0%, #0d1a2e 100%);
+      border: 2px solid rgba(99,179,237,0.5);
+      border-radius: 3px 10px 10px 3px;
+      box-shadow: -4px 0 0 #0a1220, inset -6px 0 14px rgba(0,0,0,0.5);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 16px 12px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .book-cover:hover {
+      transform: scale(1.04);
+      box-shadow: -4px 0 0 #0a1220, inset -6px 0 14px rgba(0,0,0,0.5), 0 0 18px rgba(99,179,237,0.35);
+    }
+    .cover-icon { font-size: 28px; opacity: 0.85; }
+    .cover-type {
+      font-size: 13px; font-weight: 700;
+      color: #ffe066; text-align: center;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      line-height: 1.3;
+    }
+    .cover-floor {
+      font-size: 10px; color: rgba(255,255,255,0.55);
+      text-align: center; letter-spacing: 0.05em;
+    }
+    .cover-hint {
+      font-size: 9px; color: rgba(255,255,255,0.3);
+      margin-top: 6px; letter-spacing: 0.04em;
+    }
+
+    /* open spread */
+    .book-spread {
+      display: none;
+      width: 320px;
+      height: 200px;
+      position: relative;
+      /* 3D perspective for page flip */
+      perspective: 800px;
+    }
+    .book-spread.visible { display: block; }
+
+    /* left + right page halves */
+    .book-page {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      background: #f5f0e8;
+      padding: 14px 12px 10px;
+      overflow: hidden;
+      box-sizing: border-box;
+    }
+    .book-page.left {
+      left: 0;
+      border-radius: 10px 0 0 10px;
+      border-right: none;
+      background: linear-gradient(to right, #ede8df, #f5f0e8);
+      box-shadow: inset -4px 0 8px rgba(0,0,0,0.12), -2px 0 8px rgba(0,0,0,0.3);
+    }
+    .book-page.right {
+      right: 0;
+      border-radius: 0 10px 10px 0;
+      border-left: none;
+      background: linear-gradient(to left, #ede8df, #f5f0e8);
+      box-shadow: inset 4px 0 8px rgba(0,0,0,0.12), 2px 0 8px rgba(0,0,0,0.3);
+    }
+    /* spine shadow */
+    .book-spine {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      transform: translateX(-50%);
+      width: 6px;
+      height: 100%;
+      background: linear-gradient(to right, rgba(0,0,0,0.25), rgba(0,0,0,0.05), rgba(0,0,0,0.25));
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    /* click zones — transparent overlays on each page half */
+    .book-click-left, .book-click-right {
+      position: absolute;
+      top: 0; width: 50%; height: 100%;
+      z-index: 5;
+      cursor: pointer;
+    }
+    .book-click-left  { left: 0; }
+    .book-click-right { right: 0; }
+
+    /* page content typography */
+    .page-section-title {
+      font-size: 8px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: #3b6fbf; margin-bottom: 6px;
+      border-bottom: 1px solid rgba(59,111,191,0.25);
+      padding-bottom: 3px;
+    }
+    .page-row {
+      display: flex; justify-content: space-between;
+      font-size: 9.5px; line-height: 1.6;
+      color: #1a1a2e;
+    }
+    .page-row .lbl { color: #5a6e8a; flex-shrink: 0; margin-right: 6px; }
+    .page-row .val { color: #0d1a2e; font-weight: 600; text-align: right; }
+    .page-row.hero {
+      font-size: 12px; font-weight: 700;
+      color: #1a1a2e; justify-content: center;
+      margin-bottom: 4px;
+    }
+    .page-row.sub {
+      font-size: 9px; color: #5a6e8a;
+      justify-content: center; margin-bottom: 8px;
+    }
+    .page-row.sep {
+      border-bottom: 1px solid rgba(0,0,0,0.1);
+      margin: 4px 0;
+    }
+
+    /* page number dots */
+    .page-dots {
+      position: absolute;
+      bottom: 6px; left: 0; right: 0;
+      display: flex; justify-content: center; gap: 5px;
+      z-index: 6; pointer-events: none;
+    }
+    .page-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.18);
+      transition: background 0.2s;
+    }
+    .page-dot.active { background: #3b6fbf; }
+
+    /* flip animation */
+    .book-flipper {
+      position: absolute;
+      top: 0;
+      width: 50%;
+      height: 100%;
+      transform-origin: left center;
+      transform-style: preserve-3d;
+      z-index: 4;
+      pointer-events: none;
+      transition: transform 0.45s cubic-bezier(0.645, 0.045, 0.355, 1.000);
+    }
+    .book-flipper.flip-right { transform: rotateY(-180deg); }
+    .flipper-face {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      backface-visibility: hidden;
+      background: #f5f0e8;
+      padding: 14px 12px 10px;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .flipper-face.back {
+      transform: rotateY(180deg);
+      background: linear-gradient(to left, #ede8df, #f5f0e8);
+    }
   </style>
 </head>
 <body>
@@ -148,6 +327,31 @@
   </div>
 
   <canvas id="meta-canvas"></canvas>
+
+  <!-- Book popup -->
+  <div id="book-popup">
+    <!-- CLOSED: cover -->
+    <div class="book-cover" id="book-cover">
+      <div class="cover-icon">📖</div>
+      <div class="cover-type" id="cover-type">Element</div>
+      <div class="cover-floor" id="cover-floor">—</div>
+      <div class="cover-hint">tap to open</div>
+    </div>
+    <!-- OPEN: spread -->
+    <div class="book-spread" id="book-spread">
+      <div class="book-page left"  id="book-left-page"></div>
+      <div class="book-spine"></div>
+      <div class="book-page right" id="book-right-page"></div>
+      <!-- animated flipping half -->
+      <div class="book-flipper" id="book-flipper">
+        <div class="flipper-face front" id="flipper-front"></div>
+        <div class="flipper-face back"  id="flipper-back"></div>
+      </div>
+      <div class="book-click-left"  id="book-click-left"></div>
+      <div class="book-click-right" id="book-click-right"></div>
+      <div class="page-dots" id="page-dots"></div>
+    </div>
+  </div>
 
   <div id="legend"></div>
   <div id="status">Loading model…</div>
@@ -209,63 +413,195 @@
       ];
     }
 
-    function strokeFill(text, x, y, fillColor) {
-      ctx2d.strokeStyle = "rgba(0,0,0,0.95)";
-      ctx2d.lineWidth   = 4;
-      ctx2d.lineJoin    = "round";
-      ctx2d.strokeText(text, x, y);
-      ctx2d.fillStyle = fillColor;
-      ctx2d.fillText(text, x, y);
+    // ── Book popup ────────────────────────────────────────────────────────────
+    const bookPopup     = document.getElementById("book-popup");
+    const bookCover     = document.getElementById("book-cover");
+    const bookSpread    = document.getElementById("book-spread");
+    const bookLeft      = document.getElementById("book-left-page");
+    const bookRight     = document.getElementById("book-right-page");
+    const bookFlipper   = document.getElementById("book-flipper");
+    const flipperFront  = document.getElementById("flipper-front");
+    const flipperBack   = document.getElementById("flipper-back");
+    const pageDots      = document.getElementById("page-dots");
+
+    let bookPages    = [];   // array of {left, right} HTML strings per spread
+    let bookSpreadIdx = 0;
+    let bookOpen     = false;
+    let bookFlipping = false;
+
+    function pageRow(label, value) {
+      if (!value || value === "—" || value === "0") return "";
+      return `<div class="page-row"><span class="lbl">${label}</span><span class="val">${value}</span></div>`;
     }
 
-    function drawMetaText() {
-      ctx2d.clearRect(0, 0, metaCanvas.width, metaCanvas.height);
-      if (!metaWorldPos || !metaLines) return;
+    function buildBookPages(data) {
+      // data: { constructionType, floor, apartment, schedRows, statRows, costRows }
+      const { constructionType, floor, apartment, schedRows, statRows, costRows } = data;
+
+      // Page 0 left: identity hero
+      const p0left = `
+        <div class="page-row hero">${constructionType}</div>
+        <div class="page-row sub">${floor}</div>
+        <div class="page-row sub" style="margin-top:-6px">${apartment}</div>
+      `;
+      // Page 0 right: schedule data
+      const schedHtml = schedRows.map(r => r.label ? pageRow(r.label, r.value) : `<div class="page-row sub">${r.value}</div>`).join("");
+      const p0right = schedHtml
+        ? `<div class="page-section-title">Schedule</div>${schedHtml}`
+        : `<div class="page-row sub" style="margin-top:30px;color:#aaa">No schedule data</div>`;
+
+      bookPages = [{ left: p0left, right: p0right }];
+
+      // Page 1: stat + cost if any
+      const statHtml = statRows.map(r => pageRow(r.label, r.value)).join("");
+      const costHtml = costRows.map(r => r.label ? pageRow(r.label, r.value) : `<div class="page-row sub">${r.value}</div>`).join("");
+      if (statHtml || costHtml) {
+        const p1left  = statHtml ? `<div class="page-section-title">Details</div>${statHtml}` : "";
+        const p1right = costHtml ? `<div class="page-section-title">Cost</div>${costHtml}` : "";
+        bookPages.push({ left: p1left, right: p1right });
+      }
+    }
+
+    function renderDots() {
+      pageDots.innerHTML = bookPages.map((_, i) =>
+        `<div class="page-dot${i === bookSpreadIdx ? " active" : ""}"></div>`
+      ).join("");
+    }
+
+    function setSpread(idx) {
+      const p = bookPages[idx];
+      bookLeft.innerHTML  = p.left;
+      bookRight.innerHTML = p.right;
+      renderDots();
+    }
+
+    function openBook() {
+      bookOpen = true;
+      bookSpreadIdx = 0;
+      bookCover.style.display  = "none";
+      bookSpread.classList.add("visible");
+      setSpread(0);
+    }
+
+    function closeBook() {
+      bookOpen = false;
+      bookFlipper.classList.remove("flip-right");
+      bookFlipper.style.display = "none";
+      bookSpread.classList.remove("visible");
+      bookCover.style.display = "";
+    }
+
+    function flipTo(nextIdx) {
+      if (bookFlipping) return;
+      const p = bookPages[nextIdx];
+
+      // Front of flipper = current right page; back = next left page
+      flipperFront.innerHTML = bookRight.innerHTML;
+      flipperBack.innerHTML  = p.left;
+      bookFlipper.style.left = "50%";
+      bookFlipper.style.transformOrigin = "left center";
+      bookFlipper.style.display = "block";
+      bookFlipper.classList.remove("flip-right");
+
+      // Pre-load new right page behind, new left stays as-is until flip halfway
+      bookRight.innerHTML = p.right;
+
+      bookFlipping = true;
+      // Small delay so browser renders the initial state before animating
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bookFlipper.classList.add("flip-right");
+        });
+      });
+
+      bookFlipper.addEventListener("transitionend", function handler() {
+        bookFlipper.removeEventListener("transitionend", handler);
+        bookLeft.innerHTML = p.left;
+        bookFlipper.style.display = "none";
+        bookFlipper.classList.remove("flip-right");
+        bookSpreadIdx = nextIdx;
+        renderDots();
+        bookFlipping = false;
+      }, { once: true });
+    }
+
+    function flipBackTo(prevIdx) {
+      if (bookFlipping) return;
+      const p = bookPages[prevIdx];
+
+      // Flipping left page back: flipper sits on left half, pre-rotated -180° then animates to 0°
+      flipperFront.innerHTML = bookLeft.innerHTML;
+      flipperBack.innerHTML  = p.right;
+      bookFlipper.style.left = "0";
+      bookFlipper.style.transformOrigin = "right center";
+      bookFlipper.style.display = "block";
+
+      // Start fully flipped
+      bookFlipper.style.transition = "none";
+      bookFlipper.style.transform  = "rotateY(180deg)";
+      bookLeft.innerHTML = p.left;
+
+      bookFlipping = true;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          bookFlipper.style.transition = "";
+          bookFlipper.style.transform  = "rotateY(0deg)";
+        });
+      });
+
+      bookFlipper.addEventListener("transitionend", function handler() {
+        bookFlipper.removeEventListener("transitionend", handler);
+        bookRight.innerHTML = p.right;
+        bookFlipper.style.display = "none";
+        bookFlipper.style.transform = "";
+        bookSpreadIdx = prevIdx;
+        renderDots();
+        bookFlipping = false;
+      }, { once: true });
+    }
+
+    // Click cover → open
+    bookCover.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openBook();
+    });
+
+    // Click right half → next spread / stay on last
+    document.getElementById("book-click-right").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const next = bookSpreadIdx + 1;
+      if (next < bookPages.length) flipTo(next);
+    });
+
+    // Click left half → prev spread or close
+    document.getElementById("book-click-left").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const prev = bookSpreadIdx - 1;
+      if (prev >= 0) flipBackTo(prev);
+      else closeBook();
+    });
+
+    function positionBook() {
+      if (!metaWorldPos) return;
       const sc = projectToScreen(metaWorldPos);
       if (!sc) return;
-
       const [sx, sy] = sc;
-      const lineH = 20;
-      const totalH = lineH * (metaLines.length + 1);
-      // Keep popup clear of the isolate-bar (bottom ~90px) and toolbar (top ~50px)
+      const bw = bookOpen ? 320 : 120;
+      const bh = bookOpen ? 200 : 170;
       const barClearance = document.getElementById("isolate-bar").classList.contains("visible") ? 120 : 16;
       const maxBottom = metaCanvas.height - barClearance;
-      const minTop    = 50;
-      let y = sy - totalH / 2;
-      y = Math.max(y, minTop);
-      y = Math.min(y, maxBottom - totalH); // bottom constraint wins over minTop
+      let cx = Math.max(bw / 2 + 8, Math.min(sx, metaCanvas.width - bw / 2 - 8));
+      let cy = sy;
+      cy = Math.max(bh / 2 + 50, cy);
+      cy = Math.min(maxBottom - bh / 2, cy);
+      bookPopup.style.left = cx + "px";
+      bookPopup.style.top  = cy + "px";
+    }
 
-      ctx2d.shadowColor = "transparent";
-      ctx2d.shadowBlur  = 0;
-
-      // Type header
-      ctx2d.font = "bold 15px sans-serif";
-      ctx2d.textAlign = "center";
-      strokeFill(metaLines[0].value, sx, y, "#ffe066");
-      y += lineH + 4;
-
-      // Data rows
-      ctx2d.font = "12px sans-serif";
-      for (let i = 1; i < metaLines.length; i++) {
-        const { label, value } = metaLines[i];
-        if (label.startsWith("─")) {
-          // Separator — draw centered dim line
-          ctx2d.textAlign = "center";
-          strokeFill(label, sx, y, "rgba(255,255,255,0.25)");
-        } else if (!label) {
-          // Continuation line (apartment, sub-phase, variance) — centred, dimmer
-          ctx2d.textAlign = "center";
-          strokeFill(value, sx, y, "rgba(255,255,255,0.7)");
-        } else {
-          ctx2d.textAlign = "right";
-          strokeFill(label + ":", sx - 5, y, "rgba(255,255,255,0.6)");
-          ctx2d.textAlign = "left";
-          strokeFill(value, sx + 5, y, "#ffffff");
-        }
-        y += lineH;
-      }
-
-      metaRafId = requestAnimationFrame(drawMetaText);
+    function bookRafLoop() {
+      if (!metaWorldPos) return;
+      positionBook();
+      metaRafId = requestAnimationFrame(bookRafLoop);
     }
 
     function clearAnnotation() {
@@ -273,6 +609,8 @@
       metaLines    = null;
       if (metaRafId) { cancelAnimationFrame(metaRafId); metaRafId = null; }
       ctx2d.clearRect(0, 0, metaCanvas.width, metaCanvas.height);
+      bookPopup.classList.remove("visible");
+      closeBook();
     }
 
     new NavCubePlugin(viewer, {
@@ -885,13 +1223,13 @@
         ...row("Payment",  payment),
       ];
 
-      metaLines = [
-        { label: "", value: `${constructionType} · ${floor}` },
-        ...(apartment && apartment !== "Common Areas" || em.Apartment === "" ? [{ label: "", value: apartment }] : [{ label: "", value: "Common Areas" }]),
-        ...(schedRows.length ? [...sep(), ...schedRows] : []),
-        ...(statRows.length  ? [...sep(), ...statRows]  : []),
-        ...(costRows.length  ? [...sep(), ...costRows]  : []),
-      ];
+      const aptLabel = (apartment && apartment !== "Common Areas") || em.Apartment === ""
+        ? apartment : "Common Areas";
+
+      buildBookPages({ constructionType, floor, apartment: aptLabel, schedRows, statRows, costRows });
+
+      document.getElementById("cover-type").textContent  = constructionType;
+      document.getElementById("cover-floor").textContent = `${floor} · ${aptLabel}`;
 
       const aabb = obj.aabb;
       metaWorldPos = [
@@ -900,8 +1238,16 @@
         (aabb[2] + aabb[5]) / 2,
       ];
 
-      // Start drawing after flyTo animation completes
-      setTimeout(() => { drawMetaText(); }, 850);
+      // Show book cover after flyTo settles
+      setTimeout(() => {
+        bookOpen = false;
+        bookFlipper.style.display = "none";
+        bookSpread.classList.remove("visible");
+        bookCover.style.display = "";
+        bookPopup.classList.add("visible");
+        positionBook();
+        bookRafLoop();
+      }, 850);
 
       setStatus(`Showing: ${constructionType}`);
     }
